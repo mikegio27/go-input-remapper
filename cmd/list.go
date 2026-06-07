@@ -69,6 +69,7 @@ func enumerateDirect() []control.DeviceInfo {
 			Vendor:      r.Info.Identity.Vendor,
 			Product:     r.Info.Identity.Product,
 			Recommended: r.Remappable,
+			Primary:     r.Primary,
 			IsVirtual:   r.Info.IsVirtual,
 			Reasons:     r.Reasons,
 		})
@@ -106,6 +107,9 @@ func printRecommendations(devices []control.DeviceInfo) {
 		verdict := "not recommended"
 		if d.Recommended {
 			verdict = "remappable"
+		}
+		if d.Primary {
+			verdict += ", ★ likely node"
 		}
 		fmt.Printf("%s  [%s]  %s\n", d.Name, d.Kind, verdict)
 		fmt.Printf("    %s  %04x:%04x", d.Path, d.Vendor, d.Product)

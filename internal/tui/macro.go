@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -19,6 +20,7 @@ const (
 	macroStageName
 	macroStageTrigger
 	macroStageSteps
+	macroStageRepeat
 )
 
 // macroState is the macro recorder for one device's binding. Like the remap
@@ -35,6 +37,12 @@ type macroState struct {
 	stage     macroStage
 	nameInput textinput.Model
 	draft     config.Macro
+
+	// repeat-config stage
+	repeatMode       string // config.RepeatMode*
+	repeatMsInput    textinput.Model
+	repeatCountInput textinput.Model
+	repeatFocusCount bool
 }
 
 func (m *Model) openMacroRecorder(d control.DeviceInfo) (tea.Model, tea.Cmd) {
@@ -77,6 +85,8 @@ func (m *Model) macroKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.macroNameKey(msg)
 	case macroStageSteps:
 		return m.macroStepsKey(msg)
+	case macroStageRepeat:
+		return m.macroRepeatKey(msg)
 	case macroStageTrigger:
 		// Trigger is captured via the overlay; nothing to do here but cancel.
 		if msg.String() == "esc" {
@@ -153,13 +163,111 @@ func (m *Model) macroStepsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setFlash("add at least one step (k), or esc to cancel", true)
 			return m, nil
 		}
-		ms.macros = append(ms.macros, ms.draft)
-		ms.draft = config.Macro{}
-		ms.stage = macroStageList
-		ms.cursor = len(ms.macros) - 1
-		m.setFlash("macro added (press s to save)", false)
+		// Move on to choosing whether the macro repeats.
+		ms.stage = macroStageRepeat
+		ms.repeatMode = config.RepeatModeNone
+		ms.repeatFocusCount = false
+		ms.repeatMsInput = newKeyInput("interval ms, e.g. 50")
+		ms.repeatCountInput = newKeyInput("number of runs, e.g. 5")
 	}
 	return m, nil
+}
+
+// macroRepeatKey handles the repeat-configuration stage: pick a mode and (when
+// repeating) an interval, plus a run count for "count" mode.
+func (m *Model) macroRepeatKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	ms := m.macro
+	switch msg.String() {
+	case "esc":
+		ms.stage = macroStageList
+		return m, nil
+	case "m":
+		ms.repeatMode = nextRepeatMode(ms.repeatMode)
+		if ms.repeatMode != config.RepeatModeCount {
+			ms.repeatFocusCount = false
+		}
+		m.syncRepeatFocus()
+		return m, nil
+	case "tab":
+		if ms.repeatMode == config.RepeatModeCount {
+			ms.repeatFocusCount = !ms.repeatFocusCount
+			m.syncRepeatFocus()
+		}
+		return m, nil
+	case "enter":
+		return m.macroRepeatCommit()
+	}
+	// Forward typing to the focused field (only meaningful while repeating).
+	if ms.repeatMode == config.RepeatModeNone {
+		return m, nil
+	}
+	var cmd tea.Cmd
+	if ms.repeatFocusCount {
+		ms.repeatCountInput, cmd = ms.repeatCountInput.Update(msg)
+	} else {
+		ms.repeatMsInput, cmd = ms.repeatMsInput.Update(msg)
+	}
+	return m, cmd
+}
+
+// macroRepeatCommit validates the repeat settings, writes them onto the draft,
+// appends the finished macro, and returns to the list.
+func (m *Model) macroRepeatCommit() (tea.Model, tea.Cmd) {
+	ms := m.macro
+	ms.draft.Repeat = ms.repeatMode
+	ms.draft.RepeatMs = 0
+	ms.draft.RepeatCount = 0
+	if ms.repeatMode != config.RepeatModeNone {
+		interval, err := strconv.Atoi(strings.TrimSpace(ms.repeatMsInput.Value()))
+		if err != nil || interval <= 0 {
+			m.setFlash("repeat interval must be a positive number of milliseconds", true)
+			return m, nil
+		}
+		ms.draft.RepeatMs = interval
+		if ms.repeatMode == config.RepeatModeCount {
+			count, err := strconv.Atoi(strings.TrimSpace(ms.repeatCountInput.Value()))
+			if err != nil || count <= 0 {
+				m.setFlash("repeat count must be a positive number of runs", true)
+				return m, nil
+			}
+			ms.draft.RepeatCount = count
+		}
+	}
+	ms.macros = append(ms.macros, ms.draft)
+	ms.draft = config.Macro{}
+	ms.stage = macroStageList
+	ms.cursor = len(ms.macros) - 1
+	m.setFlash("macro added (press s to save)", false)
+	return m, nil
+}
+
+// nextRepeatMode cycles none → hold → toggle → count → none.
+func nextRepeatMode(mode string) string {
+	switch mode {
+	case config.RepeatModeNone:
+		return config.RepeatModeHold
+	case config.RepeatModeHold:
+		return config.RepeatModeToggle
+	case config.RepeatModeToggle:
+		return config.RepeatModeCount
+	default:
+		return config.RepeatModeNone
+	}
+}
+
+// syncRepeatFocus focuses the right text input for the current repeat mode.
+func (m *Model) syncRepeatFocus() {
+	ms := m.macro
+	ms.repeatMsInput.Blur()
+	ms.repeatCountInput.Blur()
+	if ms.repeatMode == config.RepeatModeNone {
+		return
+	}
+	if ms.repeatFocusCount {
+		ms.repeatCountInput.Focus()
+	} else {
+		ms.repeatMsInput.Focus()
+	}
 }
 
 // macroCaptured handles a finished trigger/step capture.
@@ -202,6 +310,70 @@ func (m *Model) macroSave() (tea.Model, tea.Cmd) {
 	return m, reloadDaemon(m.opts.SocketPath)
 }
 
+// repeatModeLabel is the human label for a repeat mode.
+func repeatModeLabel(mode string) string {
+	switch mode {
+	case config.RepeatModeHold:
+		return "hold (repeat while trigger held)"
+	case config.RepeatModeToggle:
+		return "toggle (press to start, press again to stop)"
+	case config.RepeatModeCount:
+		return "count (run a fixed number of times)"
+	default:
+		return "none (run once)"
+	}
+}
+
+// repeatModeHelp is a one-line explanation shown under the selected mode.
+func repeatModeHelp(mode string) string {
+	switch mode {
+	case config.RepeatModeHold:
+		return "re-runs every interval until you release the trigger chord"
+	case config.RepeatModeToggle:
+		return "the trigger latches repeating on/off"
+	case config.RepeatModeCount:
+		return "runs exactly N times, interval apart, then stops"
+	default:
+		return "press m to make it repeat"
+	}
+}
+
+// repeatSummary describes a macro's repeat config for the list view.
+func repeatSummary(mac config.Macro) string {
+	switch mac.Repeat {
+	case config.RepeatModeHold:
+		return fmt.Sprintf("repeat while held @%dms", mac.RepeatMs)
+	case config.RepeatModeToggle:
+		return fmt.Sprintf("toggle @%dms", mac.RepeatMs)
+	case config.RepeatModeCount:
+		return fmt.Sprintf("%d×@%dms", mac.RepeatCount, mac.RepeatMs)
+	default:
+		return "once"
+	}
+}
+
+// stepLabel renders one macro step for display, covering taps, holds/releases,
+// typed text, and pure delays.
+func stepLabel(s config.MacroStep) string {
+	var label string
+	switch {
+	case s.Key != "" && s.Hold:
+		label = "hold " + s.Key
+	case s.Key != "" && s.Release:
+		label = "release " + s.Key
+	case s.Key != "":
+		label = "tap " + s.Key
+	case s.Text != "":
+		label = fmt.Sprintf("type %q", s.Text)
+	default:
+		label = "wait"
+	}
+	if s.DelayMs > 0 {
+		label = fmt.Sprintf("%s (after %dms)", label, s.DelayMs)
+	}
+	return label
+}
+
 func (m *Model) macroView() string {
 	ms := m.macro
 	var rows []string
@@ -217,13 +389,39 @@ func (m *Model) macroView() string {
 	case macroStageSteps:
 		rows = append(rows, "building: "+tabActiveStyle.Render(ms.draft.Name))
 		rows = append(rows, "trigger: "+strings.Join(ms.draft.Trigger, " + "))
+		rows = append(rows, "")
+		rows = append(rows, dimStyle.Render("steps run in order, one after another (top → bottom):"))
 		if len(ms.draft.Steps) == 0 {
 			rows = append(rows, mutedStyle.Render("no steps yet — press k to capture a key"))
 		}
 		for i, s := range ms.draft.Steps {
-			rows = append(rows, fmt.Sprintf("  %d. tap %s", i+1, s.Key))
+			arrow := "  "
+			if i > 0 {
+				arrow = dimStyle.Render("↓ ")
+			}
+			rows = append(rows, fmt.Sprintf("%s%d. %s", arrow, i+1, stepLabel(s)))
 		}
 		rows = append(rows, dimStyle.Render("k add key · enter finish macro · esc cancel"))
+		return lipgloss.JoinVertical(lipgloss.Left, rows...)
+	case macroStageRepeat:
+		rows = append(rows, "building: "+tabActiveStyle.Render(ms.draft.Name))
+		rows = append(rows, dimStyle.Render(fmt.Sprintf("%d step(s) captured", len(ms.draft.Steps))))
+		rows = append(rows, "")
+		rows = append(rows, "repeat mode: "+tabActiveStyle.Render(repeatModeLabel(ms.repeatMode)))
+		rows = append(rows, dimStyle.Render(repeatModeHelp(ms.repeatMode)))
+		if ms.repeatMode != config.RepeatModeNone {
+			rows = append(rows, "")
+			rows = append(rows, "interval: "+ms.repeatMsInput.View()+dimStyle.Render(" ms"))
+			if ms.repeatMode == config.RepeatModeCount {
+				rows = append(rows, "runs:     "+ms.repeatCountInput.View())
+			}
+		}
+		rows = append(rows, "")
+		hint := "m change mode · enter finish macro · esc cancel"
+		if ms.repeatMode == config.RepeatModeCount {
+			hint = "m change mode · tab switch field · enter finish · esc cancel"
+		}
+		rows = append(rows, dimStyle.Render(hint))
 		return lipgloss.JoinVertical(lipgloss.Left, rows...)
 	}
 
@@ -236,8 +434,8 @@ func (m *Model) macroView() string {
 		if i == ms.cursor {
 			cursor = cursorRowStyle.Render("▶ ")
 		}
-		rows = append(rows, cursor+fmt.Sprintf("%-16s %s → %d step(s)",
-			mac.Name, strings.Join(mac.Trigger, "+"), len(mac.Steps)))
+		rows = append(rows, cursor+fmt.Sprintf("%-16s %s → %d step(s) · %s",
+			mac.Name, strings.Join(mac.Trigger, "+"), len(mac.Steps), repeatSummary(mac)))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }

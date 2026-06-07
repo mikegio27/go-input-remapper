@@ -95,6 +95,9 @@ func (m *Model) devicesView() string {
 		case i == m.devCursor:
 			styled = cursorRowStyle.Render(line)
 		}
+		if d.Primary {
+			styled += "  " + goodStyle.Render("★ likely")
+		}
 		rows = append(rows, cursor+styled)
 	}
 

@@ -4,6 +4,8 @@
 package tui
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -11,18 +13,36 @@ import (
 	"github.com/mikegio27/go-input-remapper/internal/control"
 )
 
+// pollInterval is how often the TUI re-checks daemon status so the connection
+// indicator and bound-device list track reality even when the daemon is started
+// or stopped outside the TUI (e.g. systemctl, a crash).
+const pollInterval = 2 * time.Second
+
+// tickMsg drives the periodic status poll.
+type tickMsg struct{}
+
+// tickCmd schedules the next status poll.
+func tickCmd() tea.Cmd {
+	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
 // screen is the active top-level view.
 type screen int
 
 const (
 	screenDevices screen = iota
 	screenProfiles
+	screenMappings
 	screenStatus
 )
+
+// screenCount is the number of top-level screens, for tab cycling.
+const screenCount = 4
 
 var screenNames = map[screen]string{
 	screenDevices:  "Devices",
 	screenProfiles: "Profiles",
+	screenMappings: "Mappings",
 	screenStatus:   "Status",
 }
 
@@ -57,6 +77,9 @@ type Model struct {
 	addingProfile bool
 	profileInput  textinput.Model
 
+	// mappings screen
+	mapCursor int
+
 	// sub-screens (nil unless active)
 	editor *editorState
 	macro  *macroState
@@ -86,6 +109,7 @@ func (m *Model) Init() tea.Cmd {
 		fetchStatus(m.opts.SocketPath),
 		fetchDevices(m.opts.SocketPath),
 		loadConfig(m.opts.ConfigDir),
+		tickCmd(),
 	)
 }
 
@@ -97,6 +121,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
+
+	case tickMsg:
+		// Background poll: keep the daemon indicator honest and re-read config from
+		// disk so the Profiles list self-heals after a transient read failure, then
+		// reschedule. Devices refresh on r / after actions.
+		return m, tea.Batch(fetchStatus(m.opts.SocketPath), loadConfigQuiet(m.opts.ConfigDir), tickCmd())
 
 	case devicesMsg:
 		m.devices = msg.devices
@@ -119,7 +149,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case configMsg:
-		if msg.err == nil && msg.cfg != nil {
+		if msg.err != nil {
+			// Keep the last good config; surface the error unless this was a
+			// background refresh (which would otherwise flash every poll).
+			if !msg.quiet {
+				m.setFlash("config load failed: "+msg.err.Error(), true)
+			}
+			return m, nil
+		}
+		if msg.cfg != nil {
 			m.cfg = msg.cfg
 			m.refreshProfileNames()
 			if m.activeProfile == "" {
@@ -148,21 +186,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case daemonStoppedMsg:
 		m.daemonPID = 0
+		// Flip the indicator immediately; re-dialing now would race the socket
+		// close and could momentarily report "connected" again. The periodic poll
+		// confirms shortly. Refresh devices so the bound list clears.
+		m.daemonUp = false
+		m.engines = nil
 		if msg.err != nil {
 			m.setFlash("stop: "+msg.err.Error(), true)
 		} else {
 			m.setFlash("daemon stopped", false)
 		}
-		return m, tea.Batch(fetchStatus(m.opts.SocketPath), fetchDevices(m.opts.SocketPath))
+		return m, fetchDevices(m.opts.SocketPath)
 
 	case captureStartedMsg:
 		return m.onCaptureStarted(msg)
 	case captureEventMsg:
 		return m.onCaptureEvent(msg)
 	case captureClosedMsg:
-		// The session ended (peer/daemon side). Drop the overlay if still up.
+		// The session ended (peer/daemon side). Drop the overlay if still up and,
+		// when it ended on an error, surface why instead of vanishing silently.
 		if m.capture != nil {
 			m.capture = nil
+			if msg.err != nil {
+				m.setFlash("capture failed: "+msg.err.Error(), true)
+			}
 		}
 		return m, nil
 
@@ -175,6 +222,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // onKey routes key presses: capture overlay first (modal), then sub-screens,
 // then global keys, then the active screen.
 func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// A flash is a transient status line: clear it on the next keypress so it
+	// doesn't ride along across tab switches and screens. Handlers below set a
+	// fresh one when they have something to report.
+	m.flash, m.flashErr = "", false
+
 	if m.capture != nil {
 		return m.captureKey(msg)
 	}
@@ -193,10 +245,10 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "tab":
-		m.screen = (m.screen + 1) % 3
+		m.screen = (m.screen + 1) % screenCount
 		return m, nil
 	case "shift+tab":
-		m.screen = (m.screen + 2) % 3
+		m.screen = (m.screen + screenCount - 1) % screenCount
 		return m, nil
 	case "r":
 		m.refreshing = true
@@ -209,6 +261,8 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.devicesKey(msg)
 	case screenProfiles:
 		return m.profilesKey(msg)
+	case screenMappings:
+		return m.mappingsKey(msg)
 	case screenStatus:
 		return m.statusKey(msg)
 	}
@@ -232,6 +286,8 @@ func (m *Model) View() string {
 			body = m.devicesView()
 		case screenProfiles:
 			body = m.profilesView()
+		case screenMappings:
+			body = m.mappingsView()
 		case screenStatus:
 			body = m.statusView()
 		}
@@ -271,9 +327,25 @@ func (m *Model) footer() string {
 	var hints string
 	switch {
 	case m.editor != nil:
-		hints = "a add · c capture key · d delete · s save · esc back"
+		// "c capture key" only applies while adding a remap row.
+		if m.editor.adding {
+			hints = "tab switch field · c capture key · enter add · esc cancel"
+		} else {
+			hints = "↑/↓ move · a add · d delete · s save · esc back"
+		}
 	case m.macro != nil:
-		hints = "t trigger · k add key · x delete · s save · esc back"
+		switch m.macro.stage {
+		case macroStageName:
+			hints = "type a name · enter continue · esc cancel"
+		case macroStageTrigger:
+			hints = "press the trigger chord… · esc cancel"
+		case macroStageSteps:
+			hints = "k add key · enter finish macro · esc cancel"
+		case macroStageRepeat:
+			hints = "m change repeat mode · enter finish macro · esc cancel"
+		default:
+			hints = "↑/↓ move · n new · x delete · s save · esc back"
+		}
 	case m.addingProfile:
 		hints = "type a profile name · enter create · esc cancel"
 	default:
@@ -286,6 +358,8 @@ func (m *Model) footer() string {
 			hints = "↑/↓ move · enter remaps · m macros · " + toggle + " · tab switch · r refresh · q quit"
 		case screenProfiles:
 			hints = "↑/↓ move · enter activate · n new · d delete · tab switch · q quit"
+		case screenMappings:
+			hints = "↑/↓ move · enter edit · tab switch · r refresh · q quit"
 		case screenStatus:
 			if m.daemonUp {
 				hints = "k stop daemon · tab switch · r refresh · q quit"

@@ -123,6 +123,122 @@ func TestProcessorChordTrigger(t *testing.T) {
 	}
 }
 
+func TestCompileMacroRepeatFields(t *testing.T) {
+	macros, _ := mustCompile(t, []config.Macro{{
+		Name: "r", Trigger: []string{"KEY_A"}, Steps: []config.MacroStep{{Key: "KEY_B"}},
+		Repeat: config.RepeatModeCount, RepeatMs: 40, RepeatCount: 5,
+	}})
+	cm := macros[0]
+	if cm.repeatMode != config.RepeatModeCount || cm.repeatInterval != 40*time.Millisecond || cm.repeatCount != 5 {
+		t.Fatalf("repeat fields not compiled: mode=%q interval=%v count=%d", cm.repeatMode, cm.repeatInterval, cm.repeatCount)
+	}
+}
+
+func TestProcessorTriggerHeld(t *testing.T) {
+	macros, _ := mustCompile(t, []config.Macro{{
+		Name: "cp", Trigger: []string{"KEY_LEFTCTRL", "KEY_J"}, Steps: []config.MacroStep{{Key: "KEY_C"}},
+	}})
+	p := newProcessor(Ruleset{keys: map[evdev.EvCode]keyAction{}}, macros)
+	m := &macros[0]
+	if p.triggerHeld(m) {
+		t.Fatal("trigger should not be held initially")
+	}
+	p.process(keyEvent(evdev.KEY_LEFTCTRL, keyDown))
+	p.process(keyEvent(evdev.KEY_J, keyDown))
+	if !p.triggerHeld(m) {
+		t.Fatal("trigger should be held after both keys down")
+	}
+	p.process(keyEvent(evdev.KEY_J, keyUp))
+	if p.triggerHeld(m) {
+		t.Fatal("trigger should not be held after J released")
+	}
+}
+
+// TestSchedulerFireRepeatCount checks "count" mode runs the macro exactly N times
+// and invokes onDone once when it finishes on its own.
+func TestSchedulerFireRepeatCount(t *testing.T) {
+	macros, _ := mustCompile(t, []config.Macro{{
+		Name: "c", Trigger: []string{"KEY_A"}, Steps: []config.MacroStep{{Key: "KEY_B"}},
+	}})
+	sink := &recordSink{}
+	var mu sync.Mutex
+	s := newScheduler(sink, &mu)
+	s.sleep = func(time.Duration) {}
+	s.after = func(time.Duration) <-chan time.Time { // fire immediately so the interval is instant
+		ch := make(chan time.Time, 1)
+		ch <- time.Time{}
+		return ch
+	}
+	doneCalls := 0
+	s.fireRepeat(&macros[0], time.Millisecond, 3, make(chan struct{}), func() { doneCalls++ })
+	s.wait()
+
+	// tap KEY_B => 2 events per run, 3 runs => 6 events. Safe to read after wait().
+	if len(sink.events) != 6 {
+		t.Fatalf("got %d events, want 6 (3 runs of a 2-event tap)", len(sink.events))
+	}
+	if doneCalls != 1 {
+		t.Fatalf("onDone calls = %d, want 1", doneCalls)
+	}
+}
+
+// TestSchedulerFireRepeatStop checks an unbounded repeat stops promptly when its
+// stop channel closes, interrupting the wait between runs.
+func TestSchedulerFireRepeatStop(t *testing.T) {
+	macros, _ := mustCompile(t, []config.Macro{{
+		Name: "h", Trigger: []string{"KEY_A"}, Steps: []config.MacroStep{{Key: "KEY_B"}},
+	}})
+	sink := &recordSink{}
+	var mu sync.Mutex
+	s := newScheduler(sink, &mu)
+	s.sleep = func(time.Duration) {}
+	ran := make(chan struct{}, 1)
+	block := make(chan time.Time) // never fires: the wait blocks until stop closes
+	s.after = func(time.Duration) <-chan time.Time {
+		select { // signal that a run finished and we're now waiting
+		case ran <- struct{}{}:
+		default:
+		}
+		return block
+	}
+	stop := make(chan struct{})
+	s.fireRepeat(&macros[0], time.Hour, 0, stop, nil)
+	<-ran       // one run done; goroutine is now blocked on the interval wait
+	close(stop) // release it
+	s.wait()
+
+	if len(sink.events) != 2 {
+		t.Fatalf("got %d events, want 2 (exactly one run before stop)", len(sink.events))
+	}
+}
+
+// TestEmitCaptureReportsActive covers the signal the run loop uses to suppress a
+// key from passthrough while it is being learned (the fix for capture leaking the
+// pressed key into the TUI, doubling the value).
+func TestEmitCaptureReportsActive(t *testing.T) {
+	e := &Engine{sinks: map[chan<- evdev.InputEvent]struct{}{}}
+
+	if e.emitCapture(keyEvent(evdev.KEY_A, keyDown)) {
+		t.Error("no sinks: emitCapture should report not capturing")
+	}
+
+	ch := make(chan evdev.InputEvent, 1)
+	remove := e.AddCaptureSink(ch)
+	if !e.emitCapture(keyEvent(evdev.KEY_A, keyDown)) {
+		t.Error("with a sink: emitCapture should report capturing")
+	}
+	select {
+	case <-ch:
+	default:
+		t.Error("event should have been delivered to the capture sink")
+	}
+
+	remove()
+	if e.emitCapture(keyEvent(evdev.KEY_A, keyDown)) {
+		t.Error("after remove: emitCapture should report not capturing")
+	}
+}
+
 func TestSchedulerRunsStepsInOrder(t *testing.T) {
 	macros, _ := mustCompile(t, []config.Macro{{
 		Name:    "seq",

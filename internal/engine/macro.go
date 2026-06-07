@@ -22,6 +22,11 @@ type compiledMacro struct {
 	name    string
 	trigger map[evdev.EvCode]bool
 	steps   []macroStep
+
+	// repeat configuration (empty repeatMode = run the steps once per trigger).
+	repeatMode     string        // config.RepeatMode* ("hold" | "toggle" | "count")
+	repeatInterval time.Duration // wait between runs while repeating
+	repeatCount    int           // total runs for "count" mode
 }
 
 // macroStep is one timed unit of a macro: pause for delay, then emit events (each
@@ -59,6 +64,9 @@ func CompileMacros(macros []config.Macro) ([]compiledMacro, []evdev.EvCode, erro
 			}
 			cm.steps = append(cm.steps, step)
 		}
+		cm.repeatMode = m.Repeat
+		cm.repeatInterval = time.Duration(m.RepeatMs) * time.Millisecond
+		cm.repeatCount = m.RepeatCount
 		out = append(out, cm)
 	}
 

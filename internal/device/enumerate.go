@@ -1,8 +1,7 @@
 package device
 
 import (
-	"errors"
-	"io/fs"
+	"log/slog"
 
 	evdev "github.com/mikegio27/go-evdev"
 )
@@ -13,10 +12,12 @@ import (
 const DefaultVirtualPrefix = "go-input-remapper"
 
 // InspectAll opens every evdev device node and inspects the ones it can read,
-// silently skipping nodes that fail with a permission error (so an unprivileged
-// caller still gets a partial list, like evdev.ListDevices). Other open errors
-// abort. The returned Info slice carries no open handles — each device is
-// inspected and closed.
+// skipping any node it can't (permission denied, or a node that vanished or won't
+// answer its ioctls — common when a wireless device re-enumerates as the daemon
+// grabs it). Enumeration is best-effort per node: one bad node never fails the
+// whole listing. Only a failure to list the nodes at all is returned as an error.
+// The returned Info slice carries no open handles — each device is inspected and
+// closed.
 func InspectAll(virtualPrefix string) ([]Info, error) {
 	paths, err := evdev.ListDevicePaths()
 	if err != nil {
@@ -26,16 +27,16 @@ func InspectAll(virtualPrefix string) ([]Info, error) {
 	for _, path := range paths {
 		d, err := evdev.Open(path)
 		if err != nil {
-			if errors.Is(err, fs.ErrPermission) {
-				continue
-			}
-			return nil, err
+			// Permission errors are expected for an unprivileged caller; others
+			// (ENODEV/ENOENT from a node that disappeared) are transient. Either
+			// way, skip this node and keep going so the rest of the list survives.
+			slog.Debug("inspect: skipping unreadable device", "path", path, "err", err)
+			continue
 		}
 		info, err := Inspect(d, virtualPrefix)
 		d.Close()
 		if err != nil {
-			// A device that opened but won't answer its ioctls (racing
-			// removal, odd driver) is skipped rather than failing the listing.
+			slog.Debug("inspect: skipping device that won't answer ioctls", "path", path, "err", err)
 			continue
 		}
 		out = append(out, info)

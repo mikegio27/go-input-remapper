@@ -30,7 +30,7 @@ type (
 		err     error
 	}
 	captureEventMsg  struct{ ev control.CaptureEvent }
-	captureClosedMsg struct{}
+	captureClosedMsg struct{ err error }
 )
 
 // startCapture opens a dedicated connection and begins a capture stream. Capture
@@ -56,7 +56,7 @@ func waitCapture(s *captureSession) tea.Cmd {
 	return func() tea.Msg {
 		ev, ok := <-s.events
 		if !ok {
-			return captureClosedMsg{}
+			return captureClosedMsg{err: s.client.CaptureErr()}
 		}
 		return captureEventMsg{ev: ev}
 	}

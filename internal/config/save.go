@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/mikegio27/go-input-remapper/internal/paths"
 	"github.com/pelletier/go-toml/v2"
@@ -78,5 +79,32 @@ func writeAtomic(path string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
+	// CreateTemp makes the file 0600; widen to 0644 so a config dir shared between
+	// a root daemon and a user-run TUI stays readable by both.
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return err
+	}
+	// When the daemon runs as root and writes into a user-owned config dir (the
+	// single-user-desktop layout), keep new files owned by that user so the TUI
+	// can still read and overwrite them — otherwise every set_profile would leave
+	// a root:root file the user can't read. Best-effort; ignored when not root.
+	if os.Geteuid() == 0 {
+		if uid, gid, ok := dirOwner(dir); ok {
+			_ = os.Chown(tmpName, uid, gid)
+		}
+	}
 	return os.Rename(tmpName, path)
+}
+
+// dirOwner returns the uid/gid that owns dir, so a root writer can match it.
+func dirOwner(dir string) (uid, gid int, ok bool) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return 0, 0, false
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, 0, false
+	}
+	return int(st.Uid), int(st.Gid), true
 }

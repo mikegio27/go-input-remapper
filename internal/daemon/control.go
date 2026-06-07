@@ -160,6 +160,7 @@ func (s *controlServer) listDevices() control.ListDevicesResult {
 			Product:     r.Info.Identity.Product,
 			Bound:       boundPaths[r.Info.Identity.Path],
 			Recommended: r.Remappable,
+			Primary:     r.Primary,
 			IsVirtual:   r.Info.IsVirtual,
 			Reasons:     r.Reasons,
 		})

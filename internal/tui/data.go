@@ -18,8 +18,9 @@ type (
 		up     bool
 	}
 	configMsg struct {
-		cfg *config.Config
-		err error
+		cfg   *config.Config
+		err   error
+		quiet bool // background refresh: don't flash an error if it fails
 	}
 	actionMsg struct { // result of a mutating action (reload/set_profile/save)
 		text string
@@ -64,6 +65,16 @@ func loadConfig(dir string) tea.Cmd {
 	return func() tea.Msg {
 		cfg, err := config.Load(dir)
 		return configMsg{cfg: cfg, err: err}
+	}
+}
+
+// loadConfigQuiet is loadConfig for the background poll: it refreshes config from
+// disk (so the Profiles list self-heals after a transient read failure) without
+// flashing an error on every tick if the config is momentarily unreadable.
+func loadConfigQuiet(dir string) tea.Cmd {
+	return func() tea.Msg {
+		cfg, err := config.Load(dir)
+		return configMsg{cfg: cfg, err: err, quiet: true}
 	}
 }
 
@@ -182,6 +193,7 @@ func enumerateDirect() []control.DeviceInfo {
 			Vendor:      r.Info.Identity.Vendor,
 			Product:     r.Info.Identity.Product,
 			Recommended: r.Remappable,
+			Primary:     r.Primary,
 			IsVirtual:   r.Info.IsVirtual,
 			Reasons:     r.Reasons,
 		})

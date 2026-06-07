@@ -2,6 +2,8 @@ package config
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -97,6 +99,15 @@ func (w *Watcher) loop(dir string) {
 			// If profiles/ is created after startup, start watching it too.
 			if ev.Op&fsnotify.Create != 0 && ev.Name == profDir {
 				_ = w.fsw.Add(profDir)
+				reset()
+				continue
+			}
+			// Only react to actual config files. The config dir can hold unrelated
+			// files (notably daemon.log, which a TUI-started daemon writes to on
+			// every log line) — reacting to those would create a reload→log→reload
+			// feedback loop. Atomic-write temp files are ignored the same way.
+			if !relevantConfigChange(dir, profDir, ev.Name) {
+				continue
 			}
 			reset()
 		case _, ok := <-w.fsw.Errors:
@@ -123,4 +134,19 @@ func (w *Watcher) loop(dir string) {
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// relevantConfigChange reports whether a filesystem event names a file the
+// config actually depends on: the top-level config.toml, or a *.toml in
+// profiles/. Everything else in the directory (daemon.log, atomic-write temp
+// files, editor swap files) is ignored so it can't trigger a spurious reload.
+func relevantConfigChange(dir, profDir, name string) bool {
+	base := filepath.Base(name)
+	switch filepath.Dir(name) {
+	case dir:
+		return base == "config.toml"
+	case profDir:
+		return strings.HasSuffix(base, ".toml")
+	}
+	return false
 }

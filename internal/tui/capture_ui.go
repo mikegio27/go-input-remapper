@@ -24,6 +24,7 @@ type captureState struct {
 	mode     string
 	purpose  capturePurpose
 	prompt   string
+	ready    bool     // daemon has attached; safe to prompt for a keypress
 	live     []string // currently held (chord mode)
 	maxChord []string // largest held set seen (chord result)
 	result   []string
@@ -55,6 +56,11 @@ func (m *Model) onCaptureEvent(msg captureEventMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	ev := msg.ev
+	if ev.Ready {
+		// Daemon attached: now it's safe to ask the user to press a key.
+		m.capture.ready = true
+		return m, waitCapture(m.capture.session)
+	}
 	switch m.capture.mode {
 	case "key":
 		if ev.Value == 1 { // key down completes a single-key capture
@@ -95,6 +101,11 @@ func (m *Model) finishCapture() (tea.Model, tea.Cmd) {
 	if cap.session != nil {
 		cap.session.close()
 	}
+	// A visible success flash so a captured key reads differently from the
+	// "capture cancelled" the user otherwise only ever saw.
+	if len(cap.result) > 0 {
+		m.setFlash("captured "+strings.Join(cap.result, " + "), false)
+	}
 	switch cap.purpose {
 	case purposeRemapFrom, purposeRemapTo:
 		return m.editorCaptured(cap.purpose, cap.result)
@@ -106,6 +117,15 @@ func (m *Model) finishCapture() (tea.Model, tea.Cmd) {
 
 func (m *Model) captureOverlay() string {
 	c := m.capture
+	if !c.ready {
+		// Don't invite a keypress until the daemon confirms it's attached, or the
+		// first key can land in the setup gap and get dropped.
+		box := overlayStyle.Render(dimStyle.Render("preparing capture…"))
+		if m.width == 0 || m.height == 0 {
+			return box
+		}
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	}
 	lines := []string{warnStyle.Render(c.prompt), ""}
 	switch c.mode {
 	case "chord":

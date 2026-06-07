@@ -12,7 +12,7 @@ var tuiCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return tui.Run(tui.Options{
 			ConfigDir:  paths.ConfigDir(flagConfigDir),
-			SocketPath: paths.SocketPath(flagSocket),
+			SocketPath: paths.ClientSocketPath(flagSocket),
 		})
 	},
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,6 +57,59 @@ func fakeServer(t *testing.T) string {
 		}
 	}()
 	return sock
+}
+
+// errorServer answers a capture request with a single non-stream error response,
+// as the daemon does when the device can't be opened or grabbed.
+func errorServer(t *testing.T, msg string) string {
+	t.Helper()
+	sock := filepath.Join(t.TempDir(), "sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		r := bufio.NewReader(conn)
+		var req Request
+		if line, err := r.ReadBytes('\n'); err == nil {
+			json.Unmarshal(line, &req)
+		}
+		final, _ := json.Marshal(Response{ID: req.ID, OK: false, Error: msg})
+		conn.Write(append(final, '\n'))
+	}()
+	return sock
+}
+
+// TestClientCaptureError verifies a server-side failure ending the stream is
+// surfaced via CaptureErr rather than looking like a clean close.
+func TestClientCaptureError(t *testing.T) {
+	sock := errorServer(t, "open /dev/input/event9: no such device")
+	c, err := Dial(sock)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer c.Close()
+
+	events, _, err := c.Capture(CaptureParams{DevicePath: "/dev/input/event9", Mode: "key"})
+	if err != nil {
+		t.Fatalf("capture: %v", err)
+	}
+	// Drain until the stream closes (no events are sent).
+	for range events {
+	}
+	capErr := c.CaptureErr()
+	if capErr == nil {
+		t.Fatal("expected CaptureErr to report the server-side failure")
+	}
+	if !strings.Contains(capErr.Error(), "no such device") {
+		t.Errorf("CaptureErr = %q, want it to mention the server error", capErr)
+	}
 }
 
 func TestClientCaptureStream(t *testing.T) {

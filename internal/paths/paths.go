@@ -42,7 +42,8 @@ func ConfigFile(configDir string) string {
 
 // SocketPath returns the control socket path. Resolution order: the explicit
 // override (e.g. a --socket flag), then $XDG_RUNTIME_DIR/go-input-remapper.sock
-// for a per-user daemon, then the system-wide /run/go-input-remapper.sock.
+// for a per-user daemon, then the system-wide /run/go-input-remapper.sock. The
+// daemon uses this to create the socket; clients should use ClientSocketPath.
 func SocketPath(override string) string {
 	if override != "" {
 		return override
@@ -50,5 +51,31 @@ func SocketPath(override string) string {
 	if run := os.Getenv("XDG_RUNTIME_DIR"); run != "" {
 		return filepath.Join(run, appName+".sock")
 	}
-	return filepath.Join("/run", appName+".sock")
+	return systemSocket()
+}
+
+// systemSocket is the well-known path a root system daemon listens on.
+func systemSocket() string { return filepath.Join("/run", appName+".sock") }
+
+// ClientSocketPath resolves the socket a client (TUI/CLI) should connect to.
+// Like SocketPath, but when no override is given and the per-user socket is
+// absent, it falls back to the system-wide socket if that one exists — so the
+// TUI/CLI reach a root system daemon (which listens on /run/...sock) without an
+// explicit --socket. The daemon must still use SocketPath to create its socket.
+func ClientSocketPath(override string) string {
+	if override != "" {
+		return override
+	}
+	userSock := SocketPath("")
+	sysSock := systemSocket()
+	if userSock == sysSock {
+		return userSock
+	}
+	if _, err := os.Stat(userSock); err == nil {
+		return userSock // a per-user daemon is running; prefer it
+	}
+	if _, err := os.Stat(sysSock); err == nil {
+		return sysSock // fall back to the system service
+	}
+	return userSock
 }

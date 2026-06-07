@@ -72,6 +72,12 @@ func (p *processor) firedBy(code evdev.EvCode) *compiledMacro {
 	return nil
 }
 
+// triggerHeld reports whether every key of a macro's trigger chord is currently
+// held. The engine uses it to stop a "hold"-mode repeat once the chord releases.
+func (p *processor) triggerHeld(m *compiledMacro) bool {
+	return p.allHeld(m.trigger)
+}
+
 // allHeld reports whether every key in the set is currently down.
 func (p *processor) allHeld(set map[evdev.EvCode]bool) bool {
 	for code := range set {

@@ -79,6 +79,25 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 }
 
+// TestSavedFilesAreGroupReadable guards the fix for a root daemon and a user TUI
+// sharing one config dir: atomic writes must land at 0644, not CreateTemp's 0600,
+// or the other party gets permission denied reading config.toml.
+func TestSavedFilesAreGroupReadable(t *testing.T) {
+	dir := t.TempDir()
+	if err := Save(dir, sampleConfig()); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	for _, rel := range []string{"config.toml", filepath.Join("profiles", "default.toml")} {
+		fi, err := os.Stat(filepath.Join(dir, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fi.Mode().Perm(); got != 0o644 {
+			t.Errorf("%s mode = %o, want 644", rel, got)
+		}
+	}
+}
+
 func TestHexU16InFile(t *testing.T) {
 	dir := t.TempDir()
 	if err := Save(dir, sampleConfig()); err != nil {
@@ -142,6 +161,38 @@ func TestValidate(t *testing.T) {
 		errs := Validate(cfg)
 		if len(errs) < 6 {
 			t.Errorf("expected several validation errors, got %d: %v", len(errs), errs)
+		}
+	})
+
+	t.Run("repeat settings", func(t *testing.T) {
+		mk := func(m Macro) *Config {
+			return &Config{Profiles: map[string]*Profile{"p": {Name: "p", Devices: []DeviceBinding{{
+				Match: DeviceMatcher{Name: "kbd"}, Macros: []Macro{m},
+			}}}}}
+		}
+		base := Macro{Name: "m", Trigger: []string{"KEY_A"}, Steps: []MacroStep{{Key: "KEY_B"}}}
+
+		valid := []Macro{
+			base, // RepeatNone
+			{Name: "h", Trigger: []string{"KEY_A"}, Steps: base.Steps, Repeat: RepeatModeHold, RepeatMs: 50},
+			{Name: "t", Trigger: []string{"KEY_A"}, Steps: base.Steps, Repeat: RepeatModeToggle, RepeatMs: 50},
+			{Name: "c", Trigger: []string{"KEY_A"}, Steps: base.Steps, Repeat: RepeatModeCount, RepeatMs: 50, RepeatCount: 3},
+		}
+		for _, m := range valid {
+			if errs := Validate(mk(m)); len(errs) != 0 {
+				t.Errorf("repeat %q should be valid, got %v", m.Repeat, errs)
+			}
+		}
+
+		invalid := []Macro{
+			{Name: "x", Trigger: []string{"KEY_A"}, Steps: base.Steps, Repeat: "spin", RepeatMs: 50},          // unknown mode
+			{Name: "x", Trigger: []string{"KEY_A"}, Steps: base.Steps, Repeat: RepeatModeHold},                // no interval
+			{Name: "x", Trigger: []string{"KEY_A"}, Steps: base.Steps, Repeat: RepeatModeCount, RepeatMs: 50}, // no count
+		}
+		for _, m := range invalid {
+			if errs := Validate(mk(m)); len(errs) == 0 {
+				t.Errorf("repeat config %+v should be invalid", m)
+			}
 		}
 	})
 }

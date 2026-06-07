@@ -101,8 +101,14 @@ func Run(ctx context.Context, opts Options) error {
 
 // reload re-reads the config and applies it, logging the outcome. A read or
 // validation failure leaves the currently running engines untouched, so a typo
-// in the config never takes down a working remapper.
+// in the config never takes down a working remapper. A change the daemon caused
+// itself (set_profile, or a just-applied control reload) is ignored to avoid a
+// redundant second apply that would needlessly rebuild every engine.
 func reload(dir string, sup *Supervisor) {
+	if sup.ReloadSuppressed() {
+		slog.Debug("ignoring self-induced config change")
+		return
+	}
 	if problems := applyFromDisk(dir, sup); len(problems) > 0 {
 		slog.Error("reload rejected; keeping current config", "problems", errors.Join(problems...))
 		return

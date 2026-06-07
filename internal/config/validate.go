@@ -81,6 +81,26 @@ func validateBinding(where string, b DeviceBinding, add func(string, ...any)) {
 		for k, s := range m.Steps {
 			validateStep(fmt.Sprintf("%s step[%d]", mwhere, k), s, add)
 		}
+		validateRepeat(mwhere, m, add)
+	}
+}
+
+// validateRepeat checks a macro's optional repeat settings: the mode must be one
+// of the known values, a repeating macro needs a positive interval, and "count"
+// needs a positive run count.
+func validateRepeat(where string, m Macro, add func(string, ...any)) {
+	switch m.Repeat {
+	case RepeatModeNone:
+		return
+	case RepeatModeHold, RepeatModeToggle, RepeatModeCount:
+		if m.RepeatMs <= 0 {
+			add("%s: repeat %q needs a positive repeat_ms", where, m.Repeat)
+		}
+		if m.Repeat == RepeatModeCount && m.RepeatCount <= 0 {
+			add("%s: repeat \"count\" needs a positive repeat_count", where)
+		}
+	default:
+		add("%s: unknown repeat %q (use \"hold\", \"toggle\", or \"count\")", where, m.Repeat)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"sort"
 	"time"
@@ -31,10 +32,18 @@ func (s *controlServer) handleCapture(conn net.Conn, r *bufio.Reader, req contro
 
 	events, cleanup, err := s.captureSource(p.DevicePath)
 	if err != nil {
+		slog.Warn("capture: cannot open source", "path", p.DevicePath, "mode", p.Mode, "err", err)
 		writeResponse(conn, control.Response{ID: req.ID, OK: false, Error: err.Error()})
 		return
 	}
 	defer cleanup()
+	slog.Info("capture: started", "path", p.DevicePath, "mode", p.Mode)
+
+	// Tell the client we're attached so it prompts the user only now; any keypress
+	// from here on is buffered by the source channel and won't be dropped.
+	if raw, err := json.Marshal(control.CaptureEvent{Ready: true}); err == nil {
+		writeResponse(conn, control.Response{ID: req.ID, OK: true, Stream: true, Result: raw})
+	}
 
 	// Watch the same connection for stop_capture (or disconnect) in the
 	// background. It closes stop and returns, so when this function returns the
@@ -79,10 +88,12 @@ func (s *controlServer) handleCapture(conn net.Conn, r *bufio.Reader, req contro
 // recorded don't leak to the focused application).
 func (s *controlServer) captureSource(path string) (<-chan evdev.InputEvent, func(), error) {
 	if eng := s.sup.EngineFor(path); eng != nil {
+		slog.Debug("capture: teeing from bound engine", "path", path)
 		ch := make(chan evdev.InputEvent, captureSinkSize)
 		remove := eng.AddCaptureSink(ch)
 		return ch, remove, nil
 	}
+	slog.Debug("capture: temporary grab (device not bound)", "path", path)
 
 	d, err := evdev.Open(path)
 	if err != nil {

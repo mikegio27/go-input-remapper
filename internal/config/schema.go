@@ -70,11 +70,30 @@ func (r Remap) Suppresses() bool { return r.To == "" }
 
 // Macro fires a sequence of steps when its trigger chord is pressed. Trigger is
 // the set of keys that must be held together (length 1 is a single key).
+//
+// By default a macro runs its steps once per trigger. Repeat turns it into a
+// repeating macro:
+//   - "hold":   re-run every RepeatMs while the trigger chord stays held.
+//   - "toggle": press the trigger to start repeating every RepeatMs; press again to stop.
+//   - "count":  run RepeatCount times total, RepeatMs apart, then stop.
+//
+// An empty Repeat (the default) runs the steps exactly once.
 type Macro struct {
-	Name    string      `toml:"name"`
-	Trigger []string    `toml:"trigger"`
-	Steps   []MacroStep `toml:"step"`
+	Name        string      `toml:"name"`
+	Trigger     []string    `toml:"trigger"`
+	Steps       []MacroStep `toml:"step"`
+	Repeat      string      `toml:"repeat,omitempty"`       // "" | "hold" | "toggle" | "count"
+	RepeatMs    int         `toml:"repeat_ms,omitempty"`    // interval between runs when repeating
+	RepeatCount int         `toml:"repeat_count,omitempty"` // total runs for "count"
 }
+
+// Repeat mode names for Macro.Repeat. RepeatModeNone is the zero value (run once).
+const (
+	RepeatModeNone   = ""
+	RepeatModeHold   = "hold"
+	RepeatModeToggle = "toggle"
+	RepeatModeCount  = "count"
+)
 
 // MacroStep is one action in a macro. Exactly one of Key or Text is the payload
 // (a delay-only step sets neither and just pauses). For a Key step: by default

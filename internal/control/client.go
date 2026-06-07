@@ -22,6 +22,11 @@ type Client struct {
 	conn   net.Conn
 	r      *bufio.Reader
 	nextID int
+
+	// capErr records why the last capture stream ended with a server error. It is
+	// written before the events channel is closed, so a reader that observes the
+	// close also observes this value. CaptureErr reads it back.
+	capErr error
 }
 
 // Dial connects to the control socket at path.
@@ -67,16 +72,23 @@ func (c *Client) Capture(params CaptureParams) (<-chan CaptureEvent, func(), err
 	if err := c.send(MethodCapture, params); err != nil {
 		return nil, nil, err
 	}
+	c.capErr = nil
 	events := make(chan CaptureEvent)
 	go func() {
 		defer close(events)
 		for {
 			resp, err := c.readResponse()
 			if err != nil {
-				return
+				return // connection closed (e.g. by our own stop) — not an error to report
 			}
 			if !resp.Stream {
-				return // final response ends the stream
+				// Final response. A failure here (bad device, grab denied, refusing
+				// to capture from a virtual device) is the reason the overlay would
+				// otherwise vanish silently, so record it for CaptureErr.
+				if !resp.OK {
+					c.capErr = fmt.Errorf("daemon: %s", resp.Error)
+				}
+				return
 			}
 			var ce CaptureEvent
 			if json.Unmarshal(resp.Result, &ce) == nil {
@@ -87,6 +99,11 @@ func (c *Client) Capture(params CaptureParams) (<-chan CaptureEvent, func(), err
 	stop := func() { _ = c.send(MethodStopCapture, nil) }
 	return events, stop, nil
 }
+
+// CaptureErr returns the error that ended the last capture stream, or nil if it
+// ended cleanly. Call it only after the events channel returned by Capture has
+// been closed; the value is established before the close.
+func (c *Client) CaptureErr() error { return c.capErr }
 
 // send marshals and writes one request line.
 func (c *Client) send(method string, params any) error {

@@ -45,15 +45,23 @@ hand-editing files, though you still can).
 
 - **Devices** — remappable devices (keyboards/mice/gamepads) by default; press
   `a` to show all input devices (touchpads, unknown, virtual). Each row shows its
-  classification and whether the daemon has it bound. `enter` opens the remap
-  editor, `m` the macro recorder.
-- **Remap editor** — `a` add, `d` delete. Press `c` to *learn a key*: the daemon
-  streams the grabbed device's keypresses so you capture a key by pressing it.
-  Empty "to" suppresses the key. `s` saves (writes TOML + reloads the daemon).
+  classification and whether the daemon has it bound. A physical device often
+  exposes several `/dev/input/eventX` nodes (only one carries normal typing); the
+  likeliest one to edit is tagged **`★ likely`**, and opening a secondary node
+  points you back at it. `enter` opens the remap editor, `m` the macro recorder.
+- **Remap editor** — `a` add, `d` delete. While adding, press `c` to *learn a
+  key*: the daemon streams the grabbed device's keypresses so you capture a key by
+  pressing it. Empty "to" suppresses the key. `s` saves (writes TOML + reloads the
+  daemon).
 - **Macro recorder** — `n` new: name it, capture the trigger chord, then capture
-  keys as tap steps; `s` saves.
+  keys as ordered tap steps (they run top-to-bottom, one after another), then pick
+  a repeat mode (`m` cycles none/hold/toggle/count); `s` saves.
 - **Profiles** — `n` create, `d` delete, `enter` activate (persisted + applied
   live). Creating the first profile activates it automatically.
+- **Mappings** — a profile-wide table of every remap and macro across all devices
+  in the active profile. `enter` on a row jumps straight into the remap editor (or
+  macro recorder) for that device, so you can review and re-edit everything from
+  one place.
 - **Status** — daemon connection, active profile, bound devices. `d` starts the
   daemon (as a detached background process; logs to `<config-dir>/daemon.log`),
   `k` stops one the TUI started.
@@ -102,11 +110,30 @@ name = "default"
     [[device.macro.step]]
     key     = "KEY_LEFTCTRL"
     release = true
+
+  [[device.macro]]
+  name         = "rapid-fire"
+  trigger      = ["KEY_F"]
+  repeat       = "hold"   # re-run while the trigger is held
+  repeat_ms    = 40       # interval between runs
+    [[device.macro.step]]
+    key = "KEY_SPACE"
 ```
 
-Macro steps: `key` taps a key (or use `hold`/`release`); `text` types a literal
-string (US layout); `delay_ms` pauses before the step. Key names are evdev codes
-(`KEY_*`, `BTN_*`); `validate` checks them.
+Macro steps run **in order, top to bottom**, one after another: `key` taps a key
+(or use `hold`/`release`); `text` types a literal string (US layout); `delay_ms`
+pauses before the step. Key names are evdev codes (`KEY_*`, `BTN_*`); `validate`
+checks them.
+
+By default a macro runs its steps once per trigger. Set `repeat` to make it loop:
+
+- `repeat = "hold"` — re-run every `repeat_ms` while the trigger chord stays held.
+- `repeat = "toggle"` — press the trigger to start repeating every `repeat_ms`,
+  press it again to stop.
+- `repeat = "count"` — run `repeat_count` times total, `repeat_ms` apart.
+
+`repeat_ms` is required whenever `repeat` is set; `repeat_count` is required for
+`"count"`.
 
 ## Install (system service)
 
@@ -117,12 +144,23 @@ sudo usermod -aG input $USER   # so the TUI works without sudo; then re-login
 
 This builds the binary to `/usr/local/bin`, installs udev rules
 (`packaging/99-go-input-remapper.rules`) granting the `input` group access to
-`/dev/input/event*` and `/dev/uinput`, loads the `uinput` module, installs and
-enables the systemd unit (`packaging/go-input-remapper.service`), and seeds
-`/etc/go-input-remapper`.
+`/dev/input/event*` and `/dev/uinput`, loads the `uinput` module, and installs +
+enables the systemd unit (`packaging/go-input-remapper.service`).
+
+When run with `sudo`, the installer points the root service at the **invoking
+user's** config (`~/.config/go-input-remapper`) — the same files the TUI edits —
+and relaxes `ProtectHome` so the daemon can read them. (Installed straight as root
+with no `sudo` user, it uses the system-wide `/etc/go-input-remapper` instead.)
 
 The daemon needs read on `/dev/input/event*` and write on `/dev/uinput`; the udev
-rules provide both via the `input` group.
+rules provide both via the `input` group. The root daemon listens on
+`/run/go-input-remapper.sock`; the TUI/CLI auto-detect it (a per-user daemon's
+socket takes precedence if one is running), so you normally don't pass `--socket`.
+Being in the `input` group is what lets your user reach that socket.
+
+After pulling new code, update an existing install with `sudo packaging/update.sh`
+— it stops the service, rebuilds the binary, and restarts (re-run the full
+`install.sh` only when the udev rules or uinput module config change).
 
 ## Limitations
 
@@ -144,14 +182,8 @@ Tests are hardware-independent (pure transform/matcher/config/protocol logic and
 synthetic-message TUI tests). End-to-end remapping needs `/dev/input` + `/dev/uinput`
 access — run the daemon under the system service or with sufficient privileges.
 
-### CURRENT BUGS TO FIX AND ENHANCEMENTS TO MAKE
-**Key Capture**   
-* does not work in TUI. When adding a remap (press `a`), then pressing `c` to capture key, it doesn't actually capture anything. Tried with both available keyboard devices, but it wouldnt record on either.  
-* When capture is cancelled, it always says "capture cancelled"
-* The capture key should not show up as an option until you click `a` because it does not trigger anything until you press that you are adding a remap.
-**Macros**
-* Recording macros also does not work, similar to keycapture issue on remap above. On record it does not work.
-* Macros do not indicate the keys will execute separately when triggers e.g. (1->2->3 executed in order).
-* Macros should have timer options, how often to execute the macro if a repeatable option is turned on.
-**remappable devices**
-* because there are multiple events per device, it would be beneficial if there was a stricter indication on what the correct one to edit was, or like the "likely" recommendation.
+Learn-a-key capture and macro recording also need a running daemon with device
+access: the daemon serves the grabbed device's keypresses to the TUI over the
+socket, so capture won't produce anything if the daemon isn't running or can't
+read the device. If a capture fails, the TUI now reports why (and the daemon logs
+it).

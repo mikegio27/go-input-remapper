@@ -66,7 +66,26 @@ func (m *Model) openEditor(d control.DeviceInfo) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.editor = es
+	// If the user picked a secondary node of a multi-node device, point them at
+	// the likely-correct one — but still let them proceed.
+	if !d.Primary {
+		if p, ok := m.primarySiblingPath(d); ok {
+			m.setFlash("heads up: "+p+" is the ★ likely node for this device", false)
+		}
+	}
 	return m, nil
+}
+
+// primarySiblingPath returns the path of the primary node sharing d's identity
+// (same name + vendor + product), if a different one exists in the device list.
+func (m *Model) primarySiblingPath(d control.DeviceInfo) (string, bool) {
+	for _, o := range m.devices {
+		if o.Primary && o.Path != d.Path &&
+			o.Name == d.Name && o.Vendor == d.Vendor && o.Product == d.Product {
+			return o.Path, true
+		}
+	}
+	return "", false
 }
 
 func (m *Model) editorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

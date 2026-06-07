@@ -1,9 +1,32 @@
 package config
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestRelevantConfigChange(t *testing.T) {
+	dir := "/etc/go-input-remapper"
+	profDir := filepath.Join(dir, "profiles")
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{filepath.Join(dir, "config.toml"), true},
+		{filepath.Join(profDir, "default.toml"), true},
+		{filepath.Join(profDir, "wow.toml"), true},
+		{filepath.Join(dir, "daemon.log"), false},         // the feedback-loop culprit
+		{filepath.Join(dir, "config.toml.tmp123"), false}, // atomic-write temp
+		{filepath.Join(profDir, "wow.toml.swp"), false},   // editor swap
+		{filepath.Join(dir, "profiles"), false},           // the dir itself
+	}
+	for _, c := range cases {
+		if got := relevantConfigChange(dir, profDir, c.name); got != c.want {
+			t.Errorf("relevantConfigChange(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
 
 func TestWatcherFiresOnChange(t *testing.T) {
 	dir := t.TempDir()

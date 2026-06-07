@@ -13,7 +13,7 @@ import (
 // dialDaemon connects to the control socket, mapping a connection failure to a
 // friendly hint that the daemon may not be running.
 func dialDaemon() (*control.Client, error) {
-	c, err := control.Dial(paths.SocketPath(flagSocket))
+	c, err := control.Dial(paths.ClientSocketPath(flagSocket))
 	if err != nil {
 		return nil, fmt.Errorf("%w (is the daemon running?)", err)
 	}

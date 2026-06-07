@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -8,6 +9,32 @@ import (
 	"github.com/mikegio27/go-input-remapper/internal/config"
 	"github.com/mikegio27/go-input-remapper/internal/control"
 )
+
+// TestConfigErrorKeepsProfiles checks a config-load failure never blanks the
+// Profiles list (the bug where a transient read error left it empty), and that a
+// background refresh stays silent while an explicit load surfaces the error.
+func TestConfigErrorKeepsProfiles(t *testing.T) {
+	m, _ := newTestModel(t)
+	if len(m.profileNames) != 1 {
+		t.Fatalf("setup: expected 1 profile, got %d", len(m.profileNames))
+	}
+
+	m.Update(configMsg{err: errors.New("boom"), quiet: true})
+	if len(m.profileNames) != 1 {
+		t.Errorf("quiet config error should keep profiles; got %d", len(m.profileNames))
+	}
+	if m.flash != "" {
+		t.Errorf("quiet config error should not flash; got %q", m.flash)
+	}
+
+	m.Update(configMsg{err: errors.New("boom2")})
+	if len(m.profileNames) != 1 {
+		t.Errorf("config error should keep profiles; got %d", len(m.profileNames))
+	}
+	if m.flash == "" || !m.flashErr {
+		t.Errorf("explicit config error should flash an error; flash=%q err=%v", m.flash, m.flashErr)
+	}
+}
 
 func key(s string) tea.KeyMsg {
 	switch s {
@@ -59,6 +86,78 @@ func TestModelRendersScreens(t *testing.T) {
 	m.Update(key("tab")) // -> status
 	if !strings.Contains(m.View(), "daemon") {
 		t.Error("status view should mention the daemon")
+	}
+}
+
+// TestCaptureReadyHandshake checks the overlay waits for the daemon's "ready"
+// message before treating a key as captured, and then completes on a single key
+// press (the fix for capture needing two presses).
+func TestCaptureReadyHandshake(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.Update(key("enter")) // open editor
+	m.Update(key("a"))     // adding mode
+	if m.editor == nil || !m.editor.adding {
+		t.Fatal("expected editor in adding mode")
+	}
+	// Simulate beginCapture having opened the overlay (no real socket/session).
+	m.capture = &captureState{mode: "key", purpose: purposeRemapFrom, prompt: "press"}
+
+	if m.capture.ready {
+		t.Fatal("capture should not be ready before the daemon attaches")
+	}
+	m.Update(captureEventMsg{ev: control.CaptureEvent{Ready: true}})
+	if m.capture == nil || !m.capture.ready {
+		t.Fatal("expected capture marked ready after the ready message")
+	}
+	// One key-down after ready must complete the capture and fill FROM.
+	m.Update(captureEventMsg{ev: control.CaptureEvent{KeyName: "KEY_RIGHTBRACE", Value: 1}})
+	if m.capture != nil {
+		t.Fatal("capture should finish on the first key after ready")
+	}
+	if got := m.editor.fromInput.Value(); got != "KEY_RIGHTBRACE" {
+		t.Fatalf("FROM = %q, want KEY_RIGHTBRACE", got)
+	}
+}
+
+// TestMappingsScreen checks the profile-wide Mappings tab lists remaps and
+// macros, and that enter on a row opens the right editor.
+func TestMappingsScreen(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.cfg.Profiles["default"] = &config.Profile{
+		Name: "default",
+		Devices: []config.DeviceBinding{{
+			Match:  config.DeviceMatcher{Name: "Test Keyboard", Vendor: 0x1234, Product: 0x5678},
+			Remaps: []config.Remap{{From: "KEY_CAPSLOCK", To: "KEY_ESC"}},
+			Macros: []config.Macro{{Name: "greet", Trigger: []string{"KEY_LEFTCTRL", "KEY_G"}, Steps: []config.MacroStep{{Key: "KEY_H"}}}},
+		}},
+	}
+	m.activeProfile = "default"
+
+	if rows := m.mappingRows(); len(rows) != 2 {
+		t.Fatalf("expected 2 mapping rows (remap + macro), got %d", len(rows))
+	}
+
+	m.screen = screenMappings
+	v := m.View()
+	for _, want := range []string{"KEY_CAPSLOCK", "KEY_ESC", "greet"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("mappings view missing %q", want)
+		}
+	}
+
+	// enter on the remap row opens the remap editor for that device.
+	m.mapCursor = 0
+	m.Update(key("enter"))
+	if m.editor == nil {
+		t.Fatal("enter on a remap row should open the remap editor")
+	}
+
+	// enter on the macro row opens the macro recorder.
+	m.editor = nil
+	m.mapCursor = 1
+	m.Update(key("enter"))
+	if m.macro == nil {
+		t.Fatal("enter on a macro row should open the macro recorder")
 	}
 }
 
@@ -210,7 +309,11 @@ func TestMacroRecorderBuildAndSave(t *testing.T) {
 		t.Fatalf("expected steps stage, got %v", m.macro.stage)
 	}
 	m.macroCaptured(purposeMacroStep, []string{"KEY_H"})
-	m.Update(key("enter")) // finish macro -> added to list
+	m.Update(key("enter")) // finish steps -> repeat-config stage
+	if m.macro.stage != macroStageRepeat {
+		t.Fatalf("expected repeat stage, got %v", m.macro.stage)
+	}
+	m.Update(key("enter")) // accept default "none" repeat -> added to list
 	if len(m.macro.macros) != 1 {
 		t.Fatalf("expected one macro, got %d", len(m.macro.macros))
 	}
@@ -223,5 +326,54 @@ func TestMacroRecorderBuildAndSave(t *testing.T) {
 	b := cfg.Profiles["default"].Devices[0]
 	if len(b.Macros) != 1 || b.Macros[0].Name != "greet" || len(b.Macros[0].Steps) != 1 {
 		t.Errorf("macro not persisted correctly: %+v", b.Macros)
+	}
+	if b.Macros[0].Repeat != config.RepeatModeNone {
+		t.Errorf("expected non-repeating macro, got repeat=%q", b.Macros[0].Repeat)
+	}
+}
+
+// TestMacroRecorderRepeatCount drives the repeat-config stage into "count" mode
+// and checks the interval and run count are captured and persisted.
+func TestMacroRecorderRepeatCount(t *testing.T) {
+	m, dir := newTestModel(t)
+
+	m.Update(key("m"))
+	m.Update(key("n"))
+	for _, r := range "spam" {
+		m.Update(key(string(r)))
+	}
+	m.Update(key("enter"))
+	m.capture = nil
+	m.macroCaptured(purposeMacroTrigger, []string{"KEY_F5"})
+	m.macroCaptured(purposeMacroStep, []string{"KEY_A"})
+	m.Update(key("enter")) // -> repeat stage
+
+	// none -> hold -> toggle -> count
+	m.Update(key("m"))
+	m.Update(key("m"))
+	m.Update(key("m"))
+	if m.macro.repeatMode != config.RepeatModeCount {
+		t.Fatalf("expected count mode, got %q", m.macro.repeatMode)
+	}
+	for _, r := range "25" { // interval ms (interval field focused by default)
+		m.Update(key(string(r)))
+	}
+	m.Update(key("tab")) // switch to runs field
+	for _, r := range "3" {
+		m.Update(key(string(r)))
+	}
+	m.Update(key("enter")) // finish
+	if len(m.macro.macros) != 1 {
+		t.Fatalf("expected one macro, got %d", len(m.macro.macros))
+	}
+	m.Update(key("s"))
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mac := cfg.Profiles["default"].Devices[0].Macros[0]
+	if mac.Repeat != config.RepeatModeCount || mac.RepeatMs != 25 || mac.RepeatCount != 3 {
+		t.Errorf("repeat config not persisted: repeat=%q ms=%d count=%d", mac.Repeat, mac.RepeatMs, mac.RepeatCount)
 	}
 }

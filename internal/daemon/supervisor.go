@@ -20,17 +20,31 @@ const (
 	addBackoff = 40 * time.Millisecond
 )
 
+// reloadSuppressWindow is how long after an Apply the file watcher should ignore
+// config changes: when the daemon writes config itself (e.g. set_profile) or a
+// control reload applies it, the watcher would otherwise fire a redundant second
+// Apply that needlessly tears down and rebuilds every engine. Comfortably longer
+// than the watcher's debounce.
+const reloadSuppressWindow = 750 * time.Millisecond
+
+// shutdownGrace bounds how long Shutdown waits for engine run loops to exit. A
+// loop blocked in a kernel read isn't reliably interrupted by closing the fd, so
+// past this we proceed (grabs are already released and virtual devices destroyed
+// in teardown) rather than hang process exit.
+const shutdownGrace = 2 * time.Second
+
 // Supervisor owns the live set of engines, one per bound source device (keyed by
 // device node path). It applies a config/profile by tearing down and rebuilding
 // engines, and reacts to hotplug add/remove. Its methods are safe for concurrent
 // use so the control plane (M6) can query and mutate it alongside the daemon
 // loop.
 type Supervisor struct {
-	mu      sync.Mutex
-	cfg     *config.Config
-	profile *config.Profile
-	engines map[string]*engine.Engine
-	wg      sync.WaitGroup
+	mu            sync.Mutex
+	cfg           *config.Config
+	profile       *config.Profile
+	engines       map[string]*engine.Engine
+	wg            sync.WaitGroup
+	suppressUntil time.Time // ignore file-watch reloads until this time (self-write echo)
 }
 
 // NewSupervisor returns an empty supervisor; call Apply to populate it.
@@ -48,6 +62,9 @@ func (s *Supervisor) Apply(cfg *config.Config, profile *config.Profile) {
 
 	s.cfg = cfg
 	s.profile = profile
+	// This Apply (and the config write that usually precedes it) will make the
+	// file watcher fire; suppress that echo so it doesn't re-tear-down everything.
+	s.suppressUntil = time.Now().Add(reloadSuppressWindow)
 	s.teardownAllLocked()
 
 	if profile == nil {
@@ -62,6 +79,14 @@ func (s *Supervisor) Apply(cfg *config.Config, profile *config.Profile) {
 		s.tryBindLocked(path, 1)
 	}
 	slog.Info("profile applied", "profile", profile.Name, "engines", len(s.engines))
+}
+
+// ReloadSuppressed reports whether a file-watch reload should be ignored because
+// the daemon just applied a config itself (so the change on disk is its own echo).
+func (s *Supervisor) ReloadSuppressed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return time.Now().Before(s.suppressUntil)
 }
 
 // OnHotplug binds a newly appeared device or tears down a removed one.
@@ -87,12 +112,23 @@ func (s *Supervisor) OnHotplug(ev evdev.DeviceEvent) {
 	}
 }
 
-// Shutdown tears down all engines and waits for their run goroutines to exit.
+// Shutdown tears down all engines and waits (briefly) for their run goroutines to
+// exit. Teardown already ungrabs each device and destroys its virtual device, so
+// if a run loop is still blocked in a kernel read that closing the fd didn't
+// interrupt, we proceed after shutdownGrace instead of hanging process exit (which
+// would otherwise let systemd escalate to SIGKILL).
 func (s *Supervisor) Shutdown() {
 	s.mu.Lock()
 	s.teardownAllLocked()
 	s.mu.Unlock()
-	s.wg.Wait()
+
+	done := make(chan struct{})
+	go func() { s.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(shutdownGrace):
+		slog.Warn("shutdown: engine read loop(s) did not exit in time; exiting anyway")
+	}
 }
 
 // BoundDevice describes one running engine, for status reporting.

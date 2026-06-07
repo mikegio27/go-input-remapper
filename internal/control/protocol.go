@@ -66,6 +66,7 @@ type DeviceInfo struct {
 	Product     uint16   `json:"product"`
 	Bound       bool     `json:"bound"`
 	Recommended bool     `json:"recommended"`
+	Primary     bool     `json:"primary"` // likely-correct node when a device exposes several
 	IsVirtual   bool     `json:"is_virtual"`
 	Reasons     []string `json:"reasons,omitempty"`
 }
@@ -88,9 +89,13 @@ type CaptureParams struct {
 	Mode       string `json:"mode"` // "key" | "chord" | "macro"
 }
 
-// CaptureEvent is one pushed key event during capture (M7).
+// CaptureEvent is one pushed key event during capture (M7). The first message of
+// a stream has Ready=true and no key — it tells the client the daemon has
+// attached to the device, so the UI can prompt "press now" only once a keypress
+// will actually be seen (avoiding a dropped first key during setup).
 type CaptureEvent struct {
-	KeyName    string   `json:"key_name"`
+	Ready      bool     `json:"ready,omitempty"`
+	KeyName    string   `json:"key_name,omitempty"`
 	Value      int32    `json:"value"`
 	Chord      []string `json:"chord,omitempty"`
 	DurationMs int      `json:"duration_ms,omitempty"`

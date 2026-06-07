@@ -22,11 +22,12 @@ type scheduler struct {
 	out   outputSink
 	mu    *sync.Mutex
 	sleep func(time.Duration)
+	after func(time.Duration) <-chan time.Time // interruptible wait between repeats; injectable for tests
 	wg    sync.WaitGroup
 }
 
 func newScheduler(out outputSink, mu *sync.Mutex) *scheduler {
-	return &scheduler{out: out, mu: mu, sleep: time.Sleep}
+	return &scheduler{out: out, mu: mu, sleep: time.Sleep, after: time.After}
 }
 
 // fire launches a macro asynchronously and returns immediately.
@@ -35,6 +36,35 @@ func (s *scheduler) fire(m *compiledMacro) {
 	go func() {
 		defer s.wg.Done()
 		s.run(m)
+	}()
+}
+
+// fireRepeat launches a repeating macro asynchronously. It runs the macro, then
+// waits interval and runs it again, until stop is closed or it has run maxCount
+// times (maxCount <= 0 means unbounded). The wait is interruptible by stop so a
+// released trigger or a torn-down device stops it promptly. onDone (if non-nil)
+// runs when the goroutine exits, so the caller can drop its bookkeeping for a
+// repeat that ended on its own. Returns immediately.
+func (s *scheduler) fireRepeat(m *compiledMacro, interval time.Duration, maxCount int, stop <-chan struct{}, onDone func()) {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		if onDone != nil {
+			defer onDone()
+		}
+		for n := 0; maxCount <= 0 || n < maxCount; n++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			s.run(m)
+			select {
+			case <-stop:
+				return
+			case <-s.after(interval):
+			}
+		}
 	}()
 }
 

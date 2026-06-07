@@ -3,7 +3,62 @@ package device
 import (
 	"strings"
 	"testing"
+
+	evdev "github.com/mikegio27/go-evdev"
 )
+
+// kbNode builds a keyboard Info with nkeys capability codes, for primary-node tests.
+func kbNode(path, uniq string, vendor, product uint16, nkeys int) Info {
+	keys := map[evdev.EvCode]bool{}
+	for i := range nkeys {
+		keys[evdev.EvCode(i)] = true
+	}
+	return Info{
+		Identity: Identity{Path: path, Name: "kbd", Uniq: uniq, Vendor: vendor, Product: product},
+		Kind:     KindKeyboard,
+		Caps:     Caps{Keys: keys},
+	}
+}
+
+func TestMarkPrimaryByUniq(t *testing.T) {
+	// Two nodes of one physical keyboard (shared Uniq); the richer one wins.
+	recs := Recommend([]Info{
+		kbNode("/dev/input/event5", "u1", 1, 1, 8),   // sparse consumer-style node
+		kbNode("/dev/input/event3", "u1", 1, 1, 120), // full keyboard node
+	})
+	if recs[0].Primary {
+		t.Error("sparse node should not be primary")
+	}
+	if !recs[1].Primary {
+		t.Error("full keyboard node should be primary")
+	}
+	if joined := strings.Join(recs[0].Reasons, " | "); !strings.Contains(joined, "/dev/input/event3") {
+		t.Errorf("secondary node should point at the primary path; reasons: %q", joined)
+	}
+}
+
+func TestMarkPrimaryFallbackByModel(t *testing.T) {
+	// No Uniq: nodes group by vendor:product:name instead.
+	recs := Recommend([]Info{
+		kbNode("/dev/input/event3", "", 0x046d, 0xc31c, 130),
+		kbNode("/dev/input/event9", "", 0x046d, 0xc31c, 4),
+	})
+	if !recs[0].Primary || recs[1].Primary {
+		t.Errorf("expected event3 (richer) primary; got primary flags %v, %v", recs[0].Primary, recs[1].Primary)
+	}
+}
+
+func TestMarkPrimarySingleNode(t *testing.T) {
+	// A lone node has nothing to disambiguate, so it should NOT be starred —
+	// otherwise every single-node device gets a star and the marker is noise.
+	recs := Recommend([]Info{kbNode("/dev/input/event3", "solo", 1, 1, 120)})
+	if recs[0].Primary {
+		t.Error("a single-node device should not be flagged primary")
+	}
+	if joined := strings.Join(recs[0].Reasons, " | "); strings.Contains(joined, "multiple event nodes") {
+		t.Errorf("single-node device should not mention multiple nodes; reasons: %q", joined)
+	}
+}
 
 func infoOf(name string, kind Kind, hasAbs, virtual bool) Info {
 	return Info{
