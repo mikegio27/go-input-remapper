@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# One-line installer for go-input-remapper.
+# === install.sh (repo root) — PUBLIC CURL ENTRYPOINT (bootstrap) ===
+#
+# This is the thin bootstrap users curl. It does NOT do the install itself — it
+# fetches the source (for packaging assets + the source-build fallback) and then
+# delegates to the real installer, packaging/install-system.sh.
 #
 # Quick install (no clone needed):
 #
@@ -29,7 +33,7 @@ fi
 # assets and the source-build fallback.
 SRC=""
 SELF="${BASH_SOURCE[0]:-}"
-if [[ -n "$SELF" && -f "$(dirname "$SELF")/packaging/install.sh" ]]; then
+if [[ -n "$SELF" && -f "$(dirname "$SELF")/packaging/install-system.sh" ]]; then
 	SRC="$(cd "$(dirname "$SELF")" && pwd)"
 else
 	REF="${GIR_REF:-main}"
@@ -40,4 +44,4 @@ else
 	SRC="$(echo "$TMP"/*/)"
 fi
 
-exec bash "$SRC/packaging/install.sh" "$@"
+exec bash "$SRC/packaging/install-system.sh" "$@"

@@ -184,6 +184,23 @@ run `sudo packaging/update.sh` — it stops the service, installs the latest bin
 (prebuilt release when available, else a source build), and restarts. Re-run the
 full `install.sh` only when the udev rules or uinput module config change.
 
+### Uninstalling
+
+```
+sudo packaging/uninstall.sh            # removes the service, binary, udev rule, module config
+sudo packaging/uninstall.sh --purge    # also deletes your config (profiles)
+```
+
+It keeps your config by default. The uninstaller is self-contained, so you can
+also run it straight from the web:
+
+```
+curl -fsSL https://raw.githubusercontent.com/mikegio27/go-input-remapper/main/packaging/uninstall.sh | sudo bash
+```
+
+It leaves the `uinput` module loaded (other software may use `/dev/uinput`) and
+your `input` group membership intact.
+
 ### Releases
 
 Tagged releases are cut automatically from [Conventional Commits](https://www.conventionalcommits.org)

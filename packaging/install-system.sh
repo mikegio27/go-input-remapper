@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
-# Install go-input-remapper as a system service.
+# === packaging/install-system.sh — THE INSTALLER ===
 #
-# Installs the binary (downloading a prebuilt release when available, else
+# The actual installer that does the system-level work. It runs either directly
+# from a checkout or via the top-level bootstrap (../install.sh, the public
+# `curl … | sudo bash` entrypoint — don't confuse the two).
+#
+# It installs the binary (downloading a prebuilt release when available, else
 # building from source), the udev rules + uinput module config + systemd unit,
 # creates the config directory, and enables the service. Run with sudo from the
 # repo root:
 #
-#   sudo packaging/install.sh
+#   sudo packaging/install-system.sh
 #
-# Or use the one-line curl installer (see the top-level install.sh).
+# Uninstall with packaging/uninstall.sh.
 #
 # Environment overrides (see packaging/lib.sh): GIR_VERSION, GIR_BUILD_FROM_SOURCE.
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
-	echo "this installer must run as root (sudo packaging/install.sh)" >&2
+	echo "this installer must run as root (sudo packaging/install-system.sh)" >&2
 	exit 1
 fi
 
@@ -83,3 +87,4 @@ echo
 echo "Then run:  go-input-remapper        (opens the TUI; auto-finds the system socket)"
 echo "Status:    systemctl status go-input-remapper"
 echo "Logs:      journalctl -u go-input-remapper -f"
+echo "Uninstall: sudo packaging/uninstall.sh   (add --purge to also remove your config)"

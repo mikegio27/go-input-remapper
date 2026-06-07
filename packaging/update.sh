@@ -10,7 +10,7 @@
 #
 # To pull the latest release binary without a checkout at all, you can also just
 # re-run the curl installer. For a first-time install, or when the udev rules /
-# uinput module config change, use packaging/install.sh instead.
+# uinput module config change, use packaging/install-system.sh instead.
 #
 # Environment overrides (see packaging/lib.sh): GIR_VERSION, GIR_BUILD_FROM_SOURCE.
 set -euo pipefail
@@ -28,7 +28,7 @@ UNIT=go-input-remapper.service
 source "$REPO_ROOT/packaging/lib.sh"
 
 if [[ ! -f /etc/systemd/system/$UNIT ]]; then
-	echo "service not installed yet — run 'sudo packaging/install.sh' first" >&2
+	echo "service not installed yet — run 'sudo packaging/install-system.sh' first" >&2
 	exit 1
 fi
 
