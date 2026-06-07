@@ -55,6 +55,8 @@ func (m *Model) mappingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.mapCursor < len(rows)-1 {
 			m.mapCursor++
 		}
+	case "a":
+		return m.beginAddFlow()
 	case "enter":
 		if m.mapCursor < 0 || m.mapCursor >= len(rows) {
 			return m, nil
@@ -94,8 +96,8 @@ func (m *Model) deviceInfoForMatcher(match config.DeviceMatcher) control.DeviceI
 func (m *Model) mappingsView() string {
 	profile := m.activeProfile
 	if profile == "" {
-		return panelStyle.Render(mutedStyle.Render(
-			"No active profile.\nActivate one in the Profiles tab to see its mappings."))
+		return panel("Mappings", mutedStyle.Render(
+			"No active profile.\nActivate one in the Profiles tab to see its mappings."), true)
 	}
 
 	rows := m.mappingRows()
@@ -104,12 +106,11 @@ func (m *Model) mappingsView() string {
 	}
 
 	var out []string
-	out = append(out, tabActiveStyle.Render("Mappings")+dimStyle.Render("  profile: ")+profile)
-	out = append(out, "")
+	out = append(out, dimStyle.Render("profile: ")+profile, "")
 	if len(rows) == 0 {
 		out = append(out, mutedStyle.Render(
-			"No mappings in this profile yet.\nAdd them from the Devices tab: enter a device for remaps, 'm' for macros."))
-		return lipgloss.JoinVertical(lipgloss.Left, out...)
+			"No mappings in this profile yet.\nPress 'a' to add one (pick a device, then remap or macro)."))
+		return panel("Mappings", lipgloss.JoinVertical(lipgloss.Left, out...), true)
 	}
 
 	out = append(out, dimStyle.Render(fmt.Sprintf("  %-22s %-16s %s", "DEVICE", "FROM", "TO / MACRO")))
@@ -135,7 +136,7 @@ func (m *Model) mappingsView() string {
 		}
 		out = append(out, cursor+line)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, out...)
+	return panel("Mappings", lipgloss.JoinVertical(lipgloss.Left, out...), true)
 }
 
 // matcherLabel renders a device matcher as a short human label for the table.

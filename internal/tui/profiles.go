@@ -78,15 +78,8 @@ func sanitizeProfileName(s string) string {
 func (m *Model) profilesView() string {
 	var rows []string
 
-	if m.addingProfile {
-		rows = append(rows, "new profile: "+m.profileInput.View())
-		rows = append(rows, dimStyle.Render("enter to create · esc cancel"))
-		rows = append(rows, "")
-	}
-
 	if len(m.profileNames) == 0 {
-		empty := mutedStyle.Render("No profiles yet — press 'n' to create one.")
-		return lipgloss.JoinVertical(lipgloss.Left, append(rows, empty)...)
+		rows = append(rows, mutedStyle.Render("No profiles yet — press 'n' to create one."))
 	}
 	for i, name := range m.profileNames {
 		marker := "  "
@@ -110,7 +103,16 @@ func (m *Model) profilesView() string {
 		}
 		rows = append(rows, cursor+marker+label+dimStyle.Render(devCountSuffix(count)))
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+	list := panel("Profiles", lipgloss.JoinVertical(lipgloss.Left, rows...), true)
+
+	if m.addingProfile {
+		form := lipgloss.JoinVertical(lipgloss.Left,
+			"new profile: "+m.profileInput.View(),
+			dimStyle.Render("enter to create · esc cancel"),
+		)
+		return joinPanels(m.width, list, panel("New profile", form, false))
+	}
+	return list
 }
 
 func devCountSuffix(n int) string {

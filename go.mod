@@ -2,14 +2,12 @@ module github.com/mikegio27/go-input-remapper
 
 go 1.26.3
 
-replace github.com/mikegio27/go-evdev => ../go-evdev
-
 require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/mikegio27/go-evdev v0.0.0-00010101000000-000000000000
+	github.com/mikegio27/go-evdev v1.0.0
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/spf13/cobra v1.10.2
 )

@@ -157,7 +157,7 @@ func (m *Model) macroStepsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		ms.stage = macroStageList
 	case "k":
-		return m.beginCapture(ms.device.Path, "key", purposeMacroStep, "Press a key to add as a tap step…")
+		return m.beginCapture(ms.device.Path, "chord", purposeMacroStep, "Press key(s) together to add as a tap step (e.g. Shift+3), then release…")
 	case "enter", "d":
 		if len(ms.draft.Steps) == 0 {
 			m.setFlash("add at least one step (k), or esc to cancel", true)
@@ -282,8 +282,14 @@ func (m *Model) macroCaptured(purpose capturePurpose, result []string) (tea.Mode
 		ms.stage = macroStageSteps
 		m.setFlash("trigger set: "+strings.Join(result, "+")+" — press k to add key steps", false)
 	case purposeMacroStep:
-		ms.draft.Steps = append(ms.draft.Steps, config.MacroStep{Key: result[0]})
-		m.setFlash("added step "+result[0], false)
+		var step config.MacroStep
+		if len(result) == 1 {
+			step.Key = result[0]
+		} else {
+			step.Keys = result
+		}
+		ms.draft.Steps = append(ms.draft.Steps, step)
+		m.setFlash("added step "+strings.Join(result, "+"), false)
 	}
 	return m, nil
 }
@@ -355,14 +361,15 @@ func repeatSummary(mac config.Macro) string {
 // stepLabel renders one macro step for display, covering taps, holds/releases,
 // typed text, and pure delays.
 func stepLabel(s config.MacroStep) string {
+	keys := strings.Join(s.KeyNames(), " + ")
 	var label string
 	switch {
-	case s.Key != "" && s.Hold:
-		label = "hold " + s.Key
-	case s.Key != "" && s.Release:
-		label = "release " + s.Key
-	case s.Key != "":
-		label = "tap " + s.Key
+	case keys != "" && s.Hold:
+		label = "hold " + keys
+	case keys != "" && s.Release:
+		label = "release " + keys
+	case keys != "":
+		label = "tap " + keys
 	case s.Text != "":
 		label = fmt.Sprintf("type %q", s.Text)
 	default:
@@ -376,23 +383,29 @@ func stepLabel(s config.MacroStep) string {
 
 func (m *Model) macroView() string {
 	ms := m.macro
-	var rows []string
-	rows = append(rows, tabActiveStyle.Render("Macros: ")+ms.device.Name)
-	rows = append(rows, dimStyle.Render(fmt.Sprintf("profile %q · matcher %s", ms.profileKey, matcherSummary(ms.matcher))))
-	rows = append(rows, "")
+	header := lipgloss.JoinVertical(lipgloss.Left,
+		tabActiveStyle.Render("Macro recorder")+"  "+ms.device.Name,
+		dimStyle.Render(fmt.Sprintf("profile %q · matcher %s", ms.profileKey, matcherSummary(ms.matcher))),
+	)
+	wrap := func(title, body string) string {
+		return lipgloss.JoinVertical(lipgloss.Left, header, "", panel(title, body, true))
+	}
 
 	switch ms.stage {
 	case macroStageName:
-		rows = append(rows, "name: "+ms.nameInput.View())
-		rows = append(rows, dimStyle.Render("enter to continue to trigger capture · esc cancel"))
-		return lipgloss.JoinVertical(lipgloss.Left, rows...)
+		body := lipgloss.JoinVertical(lipgloss.Left,
+			"name: "+ms.nameInput.View(),
+			"",
+			dimStyle.Render("enter to continue to trigger capture · esc cancel"),
+		)
+		return wrap("New macro", body)
 	case macroStageSteps:
-		rows = append(rows, "building: "+tabActiveStyle.Render(ms.draft.Name))
-		rows = append(rows, "trigger: "+strings.Join(ms.draft.Trigger, " + "))
+		var rows []string
+		rows = append(rows, "trigger: "+tabActiveStyle.Render(strings.Join(ms.draft.Trigger, " + ")))
 		rows = append(rows, "")
 		rows = append(rows, dimStyle.Render("steps run in order, one after another (top → bottom):"))
 		if len(ms.draft.Steps) == 0 {
-			rows = append(rows, mutedStyle.Render("no steps yet — press k to capture a key"))
+			rows = append(rows, mutedStyle.Render("no steps yet — press k to capture key(s)"))
 		}
 		for i, s := range ms.draft.Steps {
 			arrow := "  "
@@ -401,10 +414,10 @@ func (m *Model) macroView() string {
 			}
 			rows = append(rows, fmt.Sprintf("%s%d. %s", arrow, i+1, stepLabel(s)))
 		}
-		rows = append(rows, dimStyle.Render("k add key · enter finish macro · esc cancel"))
-		return lipgloss.JoinVertical(lipgloss.Left, rows...)
+		rows = append(rows, "", dimStyle.Render("k add key(s) · enter finish macro · esc cancel"))
+		return wrap("Steps — "+ms.draft.Name, lipgloss.JoinVertical(lipgloss.Left, rows...))
 	case macroStageRepeat:
-		rows = append(rows, "building: "+tabActiveStyle.Render(ms.draft.Name))
+		var rows []string
 		rows = append(rows, dimStyle.Render(fmt.Sprintf("%d step(s) captured", len(ms.draft.Steps))))
 		rows = append(rows, "")
 		rows = append(rows, "repeat mode: "+tabActiveStyle.Render(repeatModeLabel(ms.repeatMode)))
@@ -422,10 +435,11 @@ func (m *Model) macroView() string {
 			hint = "m change mode · tab switch field · enter finish · esc cancel"
 		}
 		rows = append(rows, dimStyle.Render(hint))
-		return lipgloss.JoinVertical(lipgloss.Left, rows...)
+		return wrap("Repeat — "+ms.draft.Name, lipgloss.JoinVertical(lipgloss.Left, rows...))
 	}
 
 	// list stage
+	var rows []string
 	if len(ms.macros) == 0 {
 		rows = append(rows, mutedStyle.Render("no macros yet — press 'n' to record one"))
 	}
@@ -437,5 +451,5 @@ func (m *Model) macroView() string {
 		rows = append(rows, cursor+fmt.Sprintf("%-16s %s → %d step(s) · %s",
 			mac.Name, strings.Join(mac.Trigger, "+"), len(mac.Steps), repeatSummary(mac)))
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+	return wrap("Macros", lipgloss.JoinVertical(lipgloss.Left, rows...))
 }

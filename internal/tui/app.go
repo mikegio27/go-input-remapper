@@ -31,8 +31,8 @@ type screen int
 
 const (
 	screenDevices screen = iota
-	screenProfiles
 	screenMappings
+	screenProfiles
 	screenStatus
 )
 
@@ -83,6 +83,9 @@ type Model struct {
 	// sub-screens (nil unless active)
 	editor *editorState
 	macro  *macroState
+
+	// add-mapping wizard (nil unless active)
+	addFlow *addFlowState
 
 	// capture overlay (nil unless capturing)
 	capture *captureState
@@ -230,6 +233,9 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.capture != nil {
 		return m.captureKey(msg)
 	}
+	if m.addFlow != nil {
+		return m.addFlowKey(msg)
+	}
 	if m.editor != nil {
 		return m.editorKey(msg)
 	}
@@ -294,6 +300,9 @@ func (m *Model) View() string {
 	}
 
 	view := lipgloss.JoinVertical(lipgloss.Left, m.header(), body, m.footer())
+	if m.addFlow != nil {
+		view = m.addFlowOverlay() // wizard overlay replaces the frame
+	}
 	if m.capture != nil {
 		view = m.captureOverlay() // overlay replaces the frame while capturing
 	}
@@ -346,6 +355,8 @@ func (m *Model) footer() string {
 		default:
 			hints = "↑/↓ move · n new · x delete · s save · esc back"
 		}
+	case m.addFlow != nil:
+		hints = "↑/↓ move · enter select · esc cancel"
 	case m.addingProfile:
 		hints = "type a profile name · enter create · esc cancel"
 	default:
@@ -359,7 +370,7 @@ func (m *Model) footer() string {
 		case screenProfiles:
 			hints = "↑/↓ move · enter activate · n new · d delete · tab switch · q quit"
 		case screenMappings:
-			hints = "↑/↓ move · enter edit · tab switch · r refresh · q quit"
+			hints = "↑/↓ move · enter edit · a add new · tab switch · r refresh · q quit"
 		case screenStatus:
 			if m.daemonUp {
 				hints = "k stop daemon · tab switch · r refresh · q quit"

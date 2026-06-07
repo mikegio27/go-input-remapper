@@ -54,14 +54,17 @@ hand-editing files, though you still can).
   pressing it. Empty "to" suppresses the key. `s` saves (writes TOML + reloads the
   daemon).
 - **Macro recorder** — `n` new: name it, capture the trigger chord, then capture
-  keys as ordered tap steps (they run top-to-bottom, one after another), then pick
-  a repeat mode (`m` cycles none/hold/toggle/count); `s` saves.
+  ordered tap steps (they run top-to-bottom, one after another). Each step can be a
+  single key or a chord — hold several keys together when capturing (e.g. Shift+3)
+  and they're emitted as one combined tap. Then pick a repeat mode (`m` cycles
+  none/hold/toggle/count); `s` saves.
 - **Profiles** — `n` create, `d` delete, `enter` activate (persisted + applied
   live). Creating the first profile activates it automatically.
 - **Mappings** — a profile-wide table of every remap and macro across all devices
   in the active profile. `enter` on a row jumps straight into the remap editor (or
   macro recorder) for that device, so you can review and re-edit everything from
-  one place.
+  one place. Press `a` to add a new mapping from here: pick a device, then choose
+  remap or macro.
 - **Status** — daemon connection, active profile, bound devices. `d` starts the
   daemon (as a detached background process; logs to `<config-dir>/daemon.log`),
   `k` stops one the TUI started.
@@ -108,6 +111,8 @@ name = "default"
     delay_ms = 100
     key      = "KEY_V"
     [[device.macro.step]]
+    keys = ["KEY_LEFTSHIFT", "KEY_3"]   # chord: types "#"
+    [[device.macro.step]]
     key     = "KEY_LEFTCTRL"
     release = true
 
@@ -121,9 +126,11 @@ name = "default"
 ```
 
 Macro steps run **in order, top to bottom**, one after another: `key` taps a key
-(or use `hold`/`release`); `text` types a literal string (US layout); `delay_ms`
-pauses before the step. Key names are evdev codes (`KEY_*`, `BTN_*`); `validate`
-checks them.
+(or use `hold`/`release`); `keys` taps several keys together as a chord (pressed
+in order, released in reverse — e.g. `keys = ["KEY_LEFTSHIFT", "KEY_3"]` types
+`#`, and `hold`/`release` apply to the whole set); `text` types a literal string
+(US layout); `delay_ms` pauses before the step. Key names are evdev codes
+(`KEY_*`, `BTN_*`); `validate` checks them.
 
 By default a macro runs its steps once per trigger. Set `repeat` to make it loop:
 
@@ -137,15 +144,25 @@ By default a macro runs its steps once per trigger. Set `repeat` to make it loop
 
 ## Install (system service)
 
+One line — no clone, and no Go toolchain needed (it downloads a prebuilt binary):
+
 ```
-sudo packaging/install.sh
+curl -fsSL https://raw.githubusercontent.com/mikegio27/go-input-remapper/main/install.sh | sudo bash
 sudo usermod -aG input $USER   # so the TUI works without sudo; then re-login
 ```
 
-This builds the binary to `/usr/local/bin`, installs udev rules
+The installer downloads the prebuilt binary for your architecture (linux
+amd64/arm64) from the latest [GitHub Release](https://github.com/mikegio27/go-input-remapper/releases)
+and verifies its checksum. If no prebuilt binary is available for your platform,
+it falls back to building from source (which needs Go installed). It then installs
+the binary to `/usr/local/bin`, the udev rules
 (`packaging/99-go-input-remapper.rules`) granting the `input` group access to
 `/dev/input/event*` and `/dev/uinput`, loads the `uinput` module, and installs +
 enables the systemd unit (`packaging/go-input-remapper.service`).
+
+From a checkout you can run the same installer locally: `sudo ./install.sh`.
+Useful overrides: `GIR_VERSION=vX.Y.Z` to pin a release, or
+`GIR_BUILD_FROM_SOURCE=1` to always build from source.
 
 When run with `sudo`, the installer points the root service at the **invoking
 user's** config (`~/.config/go-input-remapper`) — the same files the TUI edits —
@@ -158,9 +175,22 @@ rules provide both via the `input` group. The root daemon listens on
 socket takes precedence if one is running), so you normally don't pass `--socket`.
 Being in the `input` group is what lets your user reach that socket.
 
-After pulling new code, update an existing install with `sudo packaging/update.sh`
-— it stops the service, rebuilds the binary, and restarts (re-run the full
-`install.sh` only when the udev rules or uinput module config change).
+`go-input-remapper version` (or `--version`) prints the installed version.
+
+### Updating
+
+Re-run the curl installer to pull the latest release binary, or from a checkout
+run `sudo packaging/update.sh` — it stops the service, installs the latest binary
+(prebuilt release when available, else a source build), and restarts. Re-run the
+full `install.sh` only when the udev rules or uinput module config change.
+
+### Releases
+
+Tagged releases are cut automatically from [Conventional Commits](https://www.conventionalcommits.org)
+on `main`: `release-please` opens a release PR that bumps the version and
+changelog, and merging it publishes a GitHub Release with prebuilt linux
+amd64/arm64 binaries (built by [GoReleaser](https://goreleaser.com)) plus
+checksums. See `.github/workflows/`.
 
 ## Limitations
 
@@ -187,3 +217,25 @@ access: the daemon serves the grabbed device's keypresses to the TUI over the
 socket, so capture won't produce anything if the daemon isn't running or can't
 read the device. If a capture fails, the TUI now reports why (and the daemon logs
 it).
+
+
+### ENHANCEMENTS
+
+**Macros — done.** Tap steps can now emit multiple keys at once as a chord
+(`keys = [...]`, captured by holding several keys together in the recorder). New
+mappings can be added from the **Mappings** tab (`a` → pick device → remap or
+macro), in addition to the per-device `enter`/`m` shortcuts.
+
+**Design — done.** Bordered, titled panels with more spacing and side-by-side
+list/detail layouts; tab order is Devices | Mappings | Profiles | Status; the
+blue + green accent palette is unchanged.
+
+**Deployment/Install — done.** A single curl command installs without a clone
+(`curl … | sudo bash`), downloading a prebuilt binary so Go isn't required, with a
+source-build fallback when no binary fits the platform. Releases are automated
+with `release-please` (semver from Conventional Commits) + GoReleaser (prebuilt
+linux amd64/arm64 binaries + checksums on each GitHub Release), and both
+`install.sh` and `update.sh` prefer the latest release binary. The `go-evdev`
+dependency is now consumed as the published `v1.0.0` module (the local `replace`
+directive is gone), so the repo builds standalone. See the **Install** section and
+`.github/workflows/`.

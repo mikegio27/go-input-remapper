@@ -105,12 +105,15 @@ func validateRepeat(where string, m Macro, add func(string, ...any)) {
 }
 
 func validateStep(where string, s MacroStep, add func(string, ...any)) {
+	hasKeys := s.Key != "" || len(s.Keys) > 0
 	switch {
-	case s.Key != "" && s.Text != "":
-		add("%s: set either 'key' or 'text', not both", where)
-	case s.Key != "":
-		if !IsKeyName(s.Key) {
-			add("%s: unknown key name %q", where, s.Key)
+	case hasKeys && s.Text != "":
+		add("%s: set either 'key'/'keys' or 'text', not both", where)
+	case hasKeys:
+		for _, k := range s.KeyNames() {
+			if !IsKeyName(k) {
+				add("%s: unknown key name %q", where, k)
+			}
 		}
 		if s.Hold && s.Release {
 			add("%s: 'hold' and 'release' are mutually exclusive", where)
@@ -120,9 +123,9 @@ func validateStep(where string, s MacroStep, add func(string, ...any)) {
 			add("%s: 'hold'/'release' apply to 'key' steps, not 'text'", where)
 		}
 	default:
-		// Neither key nor text: only valid as a pure delay.
+		// No key(s) or text: only valid as a pure delay.
 		if s.DelayMs <= 0 {
-			add("%s: empty step (set 'key', 'text', or a positive 'delay_ms')", where)
+			add("%s: empty step (set 'key', 'keys', 'text', or a positive 'delay_ms')", where)
 		}
 		if s.Hold || s.Release {
 			add("%s: 'hold'/'release' require a 'key'", where)

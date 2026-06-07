@@ -83,19 +83,24 @@ func compileStep(s config.MacroStep, note func(evdev.EvCode)) (macroStep, error)
 	step := macroStep{delay: time.Duration(s.DelayMs) * time.Millisecond}
 
 	switch {
-	case s.Key != "":
-		code, ok := config.LookupKey(s.Key)
-		if !ok {
-			return macroStep{}, fmt.Errorf("unknown key %q", s.Key)
+	case s.Key != "" || len(s.Keys) > 0:
+		names := s.KeyNames()
+		codes := make([]evdev.EvCode, 0, len(names))
+		for _, name := range names {
+			code, ok := config.LookupKey(name)
+			if !ok {
+				return macroStep{}, fmt.Errorf("unknown key %q", name)
+			}
+			note(code)
+			codes = append(codes, code)
 		}
-		note(code)
 		switch {
 		case s.Hold:
-			step.events = []evdev.InputEvent{keyEvent(code, keyDown)}
+			step.events = chordDown(codes)
 		case s.Release:
-			step.events = []evdev.InputEvent{keyEvent(code, keyUp)}
+			step.events = chordUp(codes)
 		default:
-			step.events = tap(code)
+			step.events = chordTap(codes)
 		}
 	case s.Text != "":
 		events, err := compileText(s.Text, note)
@@ -138,6 +143,30 @@ func compileText(text string, note func(evdev.EvCode)) ([]evdev.InputEvent, erro
 // tap is a press-and-release pair for one key.
 func tap(code evdev.EvCode) []evdev.InputEvent {
 	return []evdev.InputEvent{keyEvent(code, keyDown), keyEvent(code, keyUp)}
+}
+
+// chordDown presses every key down in order.
+func chordDown(codes []evdev.EvCode) []evdev.InputEvent {
+	events := make([]evdev.InputEvent, 0, len(codes))
+	for _, code := range codes {
+		events = append(events, keyEvent(code, keyDown))
+	}
+	return events
+}
+
+// chordUp releases every key in reverse order (mirror of chordDown).
+func chordUp(codes []evdev.EvCode) []evdev.InputEvent {
+	events := make([]evdev.InputEvent, 0, len(codes))
+	for i := len(codes) - 1; i >= 0; i-- {
+		events = append(events, keyEvent(codes[i], keyUp))
+	}
+	return events
+}
+
+// chordTap presses all keys down in order then releases them in reverse, so a
+// modifier+key chord like Shift+3 produces the shifted character.
+func chordTap(codes []evdev.EvCode) []evdev.InputEvent {
+	return append(chordDown(codes), chordUp(codes)...)
 }
 
 func keyEvent(code evdev.EvCode, value int32) evdev.InputEvent {

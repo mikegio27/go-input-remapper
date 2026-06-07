@@ -233,11 +233,12 @@ func newKeyInput(placeholder string) textinput.Model {
 
 func (m *Model) editorView() string {
 	e := m.editor
-	var rows []string
-	rows = append(rows, tabActiveStyle.Render("Remaps: ")+e.device.Name)
-	rows = append(rows, dimStyle.Render(fmt.Sprintf("profile %q · matcher %s", e.profileKey, matcherSummary(e.matcher))))
-	rows = append(rows, "")
+	header := lipgloss.JoinVertical(lipgloss.Left,
+		tabActiveStyle.Render("Remap editor")+"  "+e.device.Name,
+		dimStyle.Render(fmt.Sprintf("profile %q · matcher %s", e.profileKey, matcherSummary(e.matcher))),
+	)
 
+	var rows []string
 	if len(e.remaps) == 0 {
 		rows = append(rows, mutedStyle.Render("no remaps yet — press 'a' to add one"))
 	}
@@ -252,17 +253,18 @@ func (m *Model) editorView() string {
 		}
 		rows = append(rows, cursor+fmt.Sprintf("%-16s → %s", r.From, to))
 	}
+	list := panel("Remaps", lipgloss.JoinVertical(lipgloss.Left, rows...), !e.adding)
 
 	if e.adding {
-		rows = append(rows, "")
 		form := lipgloss.JoinVertical(lipgloss.Left,
 			"from: "+e.fromInput.View(),
 			"to:   "+e.toInput.View(),
+			"",
 			dimStyle.Render("tab switch field · c capture key · enter add · esc cancel"),
 		)
-		rows = append(rows, panelStyle.Render(form))
+		return lipgloss.JoinVertical(lipgloss.Left, header, "", joinPanels(m.width, list, panel("Add remap", form, true)))
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+	return lipgloss.JoinVertical(lipgloss.Left, header, "", list)
 }
 
 func matcherSummary(m config.DeviceMatcher) string {

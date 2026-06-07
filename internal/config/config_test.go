@@ -164,6 +164,24 @@ func TestValidate(t *testing.T) {
 		}
 	})
 
+	t.Run("multi-key steps", func(t *testing.T) {
+		mk := func(s MacroStep) *Config {
+			return &Config{Profiles: map[string]*Profile{"p": {Name: "p", Devices: []DeviceBinding{{
+				Match:  DeviceMatcher{Name: "kbd"},
+				Macros: []Macro{{Name: "m", Trigger: []string{"KEY_A"}, Steps: []MacroStep{s}}},
+			}}}}}
+		}
+		if errs := Validate(mk(MacroStep{Keys: []string{"KEY_LEFTSHIFT", "KEY_3"}})); len(errs) != 0 {
+			t.Errorf("valid chord step should pass, got %v", errs)
+		}
+		if errs := Validate(mk(MacroStep{Keys: []string{"KEY_LEFTSHIFT", "KEY_BOGUS"}})); len(errs) == 0 {
+			t.Error("chord step with a bad key should fail")
+		}
+		if errs := Validate(mk(MacroStep{Keys: []string{"KEY_A"}, Text: "x"})); len(errs) == 0 {
+			t.Error("keys + text in one step should fail")
+		}
+	})
+
 	t.Run("repeat settings", func(t *testing.T) {
 		mk := func(m Macro) *Config {
 			return &Config{Profiles: map[string]*Profile{"p": {Name: "p", Devices: []DeviceBinding{{

@@ -79,6 +79,11 @@ func TestModelRendersScreens(t *testing.T) {
 	if !strings.Contains(m.View(), "Test Keyboard") {
 		t.Error("devices view should list the device")
 	}
+	// Tab order is Devices | Mappings | Profiles | Status.
+	m.Update(key("tab")) // -> mappings
+	if m.screen != screenMappings {
+		t.Errorf("first tab should land on Mappings, got %v", m.screen)
+	}
 	m.Update(key("tab")) // -> profiles
 	if !strings.Contains(m.View(), "default") {
 		t.Error("profiles view should list the default profile")
@@ -158,6 +163,84 @@ func TestMappingsScreen(t *testing.T) {
 	m.Update(key("enter"))
 	if m.macro == nil {
 		t.Fatal("enter on a macro row should open the macro recorder")
+	}
+}
+
+// TestAddFlowFromMappings drives the Mappings-tab "add new mapping" wizard:
+// press a -> pick a device -> choose remap/macro -> the right sub-screen opens.
+func TestAddFlowFromMappings(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.screen = screenMappings
+
+	m.Update(key("a")) // open the wizard
+	if m.addFlow == nil || m.addFlow.stage != addFlowPickDevice {
+		t.Fatal("expected the device-pick stage")
+	}
+	if len(m.addFlow.devices) != 1 {
+		t.Fatalf("expected 1 remappable device offered, got %d", len(m.addFlow.devices))
+	}
+	if !strings.Contains(m.View(), "Test Keyboard") {
+		t.Error("wizard overlay should list the device")
+	}
+
+	m.Update(key("enter")) // select the device -> type chooser
+	if m.addFlow == nil || m.addFlow.stage != addFlowPickType {
+		t.Fatal("expected the type-pick stage")
+	}
+
+	m.Update(key("m")) // choose Macro
+	if m.addFlow != nil {
+		t.Error("wizard should close after choosing a type")
+	}
+	if m.macro == nil {
+		t.Fatal("choosing macro should open the macro recorder")
+	}
+	if m.macro.device.Name != "Test Keyboard" {
+		t.Errorf("recorder opened for wrong device: %s", m.macro.device.Name)
+	}
+}
+
+// TestAddFlowNeedsDevices flashes an error rather than opening an empty wizard.
+func TestAddFlowNeedsDevices(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.Update(devicesMsg{devices: nil}) // no devices present
+	m.screen = screenMappings
+	m.Update(key("a"))
+	if m.addFlow != nil {
+		t.Error("wizard should not open with no remappable devices")
+	}
+	if !m.flashErr {
+		t.Error("expected an error flash when no devices are available")
+	}
+}
+
+// TestMacroRecorderMultiKeyStep checks a captured chord becomes a multi-key step.
+func TestMacroRecorderMultiKeyStep(t *testing.T) {
+	m, dir := newTestModel(t)
+	m.Update(key("m"))
+	m.Update(key("n"))
+	for _, r := range "hash" {
+		m.Update(key(string(r)))
+	}
+	m.Update(key("enter"))
+	m.capture = nil
+	m.macroCaptured(purposeMacroTrigger, []string{"KEY_F6"})
+	// A two-key capture becomes a single Keys step.
+	m.macroCaptured(purposeMacroStep, []string{"KEY_LEFTSHIFT", "KEY_3"})
+	if len(m.macro.draft.Steps) != 1 || len(m.macro.draft.Steps[0].Keys) != 2 {
+		t.Fatalf("expected one 2-key step, got %+v", m.macro.draft.Steps)
+	}
+	m.Update(key("enter")) // -> repeat stage
+	m.Update(key("enter")) // accept none -> add
+	m.Update(key("s"))     // save
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := cfg.Profiles["default"].Devices[0].Macros[0].Steps[0]
+	if len(step.Keys) != 2 || step.Keys[0] != "KEY_LEFTSHIFT" || step.Keys[1] != "KEY_3" {
+		t.Errorf("multi-key step not persisted: %+v", step)
 	}
 }
 
@@ -241,7 +324,7 @@ func TestDeviceFilterDefaultRemappableOnly(t *testing.T) {
 
 func TestProfileCreateAndDelete(t *testing.T) {
 	m, dir := newTestModel(t)
-	m.Update(key("tab")) // -> profiles
+	m.screen = screenProfiles
 
 	// Create "gaming".
 	m.Update(key("n"))

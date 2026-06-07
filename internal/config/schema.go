@@ -95,16 +95,34 @@ const (
 	RepeatModeCount  = "count"
 )
 
-// MacroStep is one action in a macro. Exactly one of Key or Text is the payload
-// (a delay-only step sets neither and just pauses). For a Key step: by default
-// it taps (down+up); Hold presses and keeps the key down; Release releases a
-// previously held key. DelayMs pauses before the step runs.
+// MacroStep is one action in a macro. Exactly one of Key, Keys, or Text is the
+// payload (a delay-only step sets none and just pauses). Keys emits several keys
+// together as a chord (e.g. ["KEY_LEFTSHIFT","KEY_3"] types "#"): a tap presses
+// them all down in order then releases them in reverse; Hold presses them all
+// down; Release releases them in reverse. Key is the single-key shorthand and is
+// equivalent to a one-element Keys. By default a step taps (down+up); Hold
+// presses and keeps the key(s) down; Release releases previously held key(s).
+// DelayMs pauses before the step runs.
 type MacroStep struct {
-	Key     string `toml:"key,omitempty"`
-	Text    string `toml:"text,omitempty"`
-	Hold    bool   `toml:"hold,omitempty"`
-	Release bool   `toml:"release,omitempty"`
-	DelayMs int    `toml:"delay_ms,omitempty"`
+	Key     string   `toml:"key,omitempty"`
+	Keys    []string `toml:"keys,omitempty"`
+	Text    string   `toml:"text,omitempty"`
+	Hold    bool     `toml:"hold,omitempty"`
+	Release bool     `toml:"release,omitempty"`
+	DelayMs int      `toml:"delay_ms,omitempty"`
+}
+
+// KeyNames returns the keys a step acts on, unifying the single-key Key
+// shorthand and the multi-key Keys field (Key first if both are somehow set).
+func (s MacroStep) KeyNames() []string {
+	switch {
+	case s.Key != "" && len(s.Keys) > 0:
+		return append([]string{s.Key}, s.Keys...)
+	case s.Key != "":
+		return []string{s.Key}
+	default:
+		return s.Keys
+	}
 }
 
 // HexU16 is a 16-bit USB vendor/product id rendered in TOML as a lowercase hex

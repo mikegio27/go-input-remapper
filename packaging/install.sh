@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # Install go-input-remapper as a system service.
 #
-# Builds the binary, installs udev rules + the uinput module config + the systemd
-# unit, creates the system config directory, and enables the service. Run with
-# sudo from the repo root:
+# Installs the binary (downloading a prebuilt release when available, else
+# building from source), the udev rules + uinput module config + systemd unit,
+# creates the config directory, and enables the service. Run with sudo from the
+# repo root:
 #
 #   sudo packaging/install.sh
 #
+# Or use the one-line curl installer (see the top-level install.sh).
+#
+# Environment overrides (see packaging/lib.sh): GIR_VERSION, GIR_BUILD_FROM_SOURCE.
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
@@ -17,6 +21,9 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN=/usr/local/bin/go-input-remapper
 UNIT=/etc/systemd/system/go-input-remapper.service
+
+# shellcheck source=packaging/lib.sh
+source "$REPO_ROOT/packaging/lib.sh"
 
 # Run the root service against the invoking desktop user's config so the same
 # files the TUI edits (~/.config) are what the daemon reads. Falls back to a
@@ -35,8 +42,7 @@ fi
 # new binary is actually picked up when we start again below.
 systemctl stop go-input-remapper.service 2>/dev/null || true
 
-echo "==> building"
-( cd "$REPO_ROOT" && go build -o "$BIN" . )
+install_binary
 
 echo "==> installing udev rules and uinput module config"
 install -m 0644 "$REPO_ROOT/packaging/99-go-input-remapper.rules" /etc/udev/rules.d/99-go-input-remapper.rules

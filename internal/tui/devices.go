@@ -59,14 +59,14 @@ func (m *Model) selectedDevice() (control.DeviceInfo, bool) {
 
 func (m *Model) devicesView() string {
 	if len(m.devices) == 0 {
-		return panelStyle.Render(mutedStyle.Render(
-			"No readable input devices.\nStart the daemon or run with more privileges (input group / root)."))
+		return panel("Devices", mutedStyle.Render(
+			"No readable input devices.\nStart the daemon or run with more privileges (input group / root)."), true)
 	}
 
 	vis := m.visibleDevices()
 	if len(vis) == 0 {
-		return panelStyle.Render(mutedStyle.Render(
-			"No remappable devices (keyboards/mice/gamepads) detected.\nPress 'a' to show all input devices."))
+		return panel("Devices", mutedStyle.Render(
+			"No remappable devices (keyboards/mice/gamepads) detected.\nPress 'a' to show all input devices."), true)
 	}
 
 	var rows []string
@@ -100,8 +100,10 @@ func (m *Model) devicesView() string {
 		}
 		rows = append(rows, cursor+styled)
 	}
-
-	table := lipgloss.JoinVertical(lipgloss.Left, rows...)
+	if !m.devFromDaemon {
+		rows = append(rows, "", dimStyle.Render("(daemon down — direct enumeration; STATUS unavailable)"))
+	}
+	list := panel("Devices", lipgloss.JoinVertical(lipgloss.Left, rows...), true)
 
 	// Detail panel for the selected device: recommendation reasons.
 	detail := ""
@@ -115,14 +117,10 @@ func (m *Model) devicesView() string {
 		for _, r := range d.Reasons {
 			rs = append(rs, dimStyle.Render("· "+r))
 		}
-		detail = "\n" + panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rs...))
+		detail = panel("Details", lipgloss.JoinVertical(lipgloss.Left, rs...), false)
 	}
 
-	src := ""
-	if !m.devFromDaemon {
-		src = dimStyle.Render("  (daemon down — showing direct enumeration; STATUS unavailable)")
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, table, src, detail)
+	return joinPanels(m.width, list, detail)
 }
 
 func deviceStatus(d control.DeviceInfo) string {

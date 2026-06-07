@@ -25,35 +25,34 @@ func (m *Model) statusKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) statusView() string {
-	var rows []string
-
 	conn := errStyle.Render("not connected")
 	if m.daemonUp {
 		conn = goodStyle.Render("connected")
 	}
-	rows = append(rows, "daemon:  "+conn)
-	rows = append(rows, "socket:  "+dimStyle.Render(m.opts.SocketPath))
-	rows = append(rows, "config:  "+dimStyle.Render(m.opts.ConfigDir))
-
 	profile := m.activeProfile
 	if profile == "" {
 		profile = "(none)"
 	}
-	rows = append(rows, "profile: "+profile)
-	rows = append(rows, "")
+	info := lipgloss.JoinVertical(lipgloss.Left,
+		"daemon:  "+conn,
+		"socket:  "+dimStyle.Render(m.opts.SocketPath),
+		"config:  "+dimStyle.Render(m.opts.ConfigDir),
+		"profile: "+profile,
+	)
+	daemonPanel := panel("Daemon", info, true)
 
-	if !m.daemonUp {
-		rows = append(rows, mutedStyle.Render("Start the daemon to see bound devices and enable live capture."))
-		return panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
-	}
-
-	if len(m.engines) == 0 {
-		rows = append(rows, mutedStyle.Render("No devices currently bound."))
-	} else {
-		rows = append(rows, dimStyle.Render("bound devices:"))
+	var body string
+	switch {
+	case !m.daemonUp:
+		body = mutedStyle.Render("Start the daemon to see bound\ndevices and enable live capture.")
+	case len(m.engines) == 0:
+		body = mutedStyle.Render("No devices currently bound.")
+	default:
+		var rows []string
 		for _, e := range m.engines {
-			rows = append(rows, "  "+e.Path+dimStyle.Render("  →  "+e.Name))
+			rows = append(rows, e.Path+dimStyle.Render("  →  "+e.Name))
 		}
+		body = lipgloss.JoinVertical(lipgloss.Left, rows...)
 	}
-	return panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+	return joinPanels(m.width, daemonPanel, panel("Bound devices", body, false))
 }

@@ -35,16 +35,42 @@ var (
 	warnStyle      = lipgloss.NewStyle().Foreground(colWarn)
 	errStyle       = lipgloss.NewStyle().Foreground(colErr)
 
-	panelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colDim).
-			Padding(0, 1)
-
 	overlayStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colAccent).
 			Padding(1, 2)
+
+	// panelTitleStyle is the heading rendered at the top of a titled panel.
+	panelTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
 )
+
+// panel wraps body in a titled rounded box. focused panels get a blue border, the
+// rest a dim grey one, so the eye lands on the active region.
+func panel(title, body string, focused bool) string {
+	border := colDim
+	if focused {
+		border = colAccent
+	}
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(border).
+		Padding(0, 1)
+	head := panelTitleStyle.Render(title)
+	return style.Render(lipgloss.JoinVertical(lipgloss.Left, head, "", body))
+}
+
+// joinPanels lays two panels side by side when the terminal is wide enough,
+// stacking them otherwise so nothing gets clipped on narrow terminals.
+func joinPanels(width int, left, right string) string {
+	if right == "" {
+		return left
+	}
+	combined := lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right)
+	if width > 0 && lipgloss.Width(combined) > width {
+		return lipgloss.JoinVertical(lipgloss.Left, left, right)
+	}
+	return combined
+}
 
 // dot returns a connection indicator: filled green when up, hollow grey when down.
 func dot(up bool) string {

@@ -239,6 +239,67 @@ func TestEmitCaptureReportsActive(t *testing.T) {
 	}
 }
 
+// TestCompileChordStep checks a multi-key tap step presses all keys down in
+// order then releases them in reverse (so Shift+3 yields the shifted char), and
+// that Hold/Release variants emit only the downs/ups.
+func TestCompileChordStep(t *testing.T) {
+	macros, extra := mustCompile(t, []config.Macro{{
+		Name:    "hash",
+		Trigger: []string{"BTN_SIDE"},
+		Steps: []config.MacroStep{
+			{Keys: []string{"KEY_LEFTSHIFT", "KEY_3"}},                  // tap chord
+			{Keys: []string{"KEY_LEFTCTRL", "KEY_LEFTALT"}, Hold: true}, // hold chord
+			{Keys: []string{"KEY_LEFTCTRL", "KEY_LEFTALT"}, Release: true},
+		},
+	}})
+
+	// Extras must include every key the chords touch.
+	want := map[evdev.EvCode]bool{evdev.KEY_LEFTSHIFT: false, evdev.KEY_3: false, evdev.KEY_LEFTCTRL: false, evdev.KEY_LEFTALT: false}
+	for _, c := range extra {
+		if _, ok := want[c]; ok {
+			want[c] = true
+		}
+	}
+	for code, seen := range want {
+		if !seen {
+			t.Errorf("expected extra capability for %s", evdev.CodeName(evdev.EV_KEY, code))
+		}
+	}
+
+	// Tap chord: Shift down, 3 down, 3 up, Shift up (reverse release order).
+	wantTap := []evdev.InputEvent{
+		keyEvent(evdev.KEY_LEFTSHIFT, keyDown),
+		keyEvent(evdev.KEY_3, keyDown),
+		keyEvent(evdev.KEY_3, keyUp),
+		keyEvent(evdev.KEY_LEFTSHIFT, keyUp),
+	}
+	if got := macros[0].steps[0].events; !eventsEqual(got, wantTap) {
+		t.Errorf("tap chord events = %+v, want %+v", got, wantTap)
+	}
+	// Hold chord: both downs, in order.
+	wantHold := []evdev.InputEvent{keyEvent(evdev.KEY_LEFTCTRL, keyDown), keyEvent(evdev.KEY_LEFTALT, keyDown)}
+	if got := macros[0].steps[1].events; !eventsEqual(got, wantHold) {
+		t.Errorf("hold chord events = %+v, want %+v", got, wantHold)
+	}
+	// Release chord: both ups, reverse order.
+	wantRel := []evdev.InputEvent{keyEvent(evdev.KEY_LEFTALT, keyUp), keyEvent(evdev.KEY_LEFTCTRL, keyUp)}
+	if got := macros[0].steps[2].events; !eventsEqual(got, wantRel) {
+		t.Errorf("release chord events = %+v, want %+v", got, wantRel)
+	}
+}
+
+func eventsEqual(a, b []evdev.InputEvent) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Code != b[i].Code || a[i].Value != b[i].Value || a[i].Type != b[i].Type {
+			return false
+		}
+	}
+	return true
+}
+
 func TestSchedulerRunsStepsInOrder(t *testing.T) {
 	macros, _ := mustCompile(t, []config.Macro{{
 		Name:    "seq",

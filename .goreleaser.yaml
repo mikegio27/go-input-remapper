@@ -1,0 +1,56 @@
+# GoReleaser config — builds the cross-platform binaries and uploads them to the
+# GitHub Release on a version tag. See .github/workflows/release.yml.
+# Docs: https://goreleaser.com
+version: 2
+
+project_name: go-input-remapper
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: go-input-remapper
+    main: .
+    binary: go-input-remapper
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    # Stamp the version into cmd.version so `go-input-remapper version` is accurate.
+    ldflags:
+      - -s -w -X github.com/mikegio27/go-input-remapper/cmd.version={{ .Version }}
+
+archives:
+  # name_template intentionally omits the version so install.sh can fetch a
+  # stable asset name (go-input-remapper_linux_amd64.tar.gz) for any release.
+  - id: default
+    name_template: "go-input-remapper_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE*
+      - packaging/*
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  github:
+    owner: mikegio27
+    name: go-input-remapper
+  # release-please creates the GitHub Release (notes + tag); GoReleaser only adds
+  # the binary archives + checksums to it, so append rather than recreate.
+  mode: append
