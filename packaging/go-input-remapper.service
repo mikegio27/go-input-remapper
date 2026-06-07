@@ -1,0 +1,35 @@
+[Unit]
+Description=go-input-remapper daemon (input remapping, macros, profiles)
+Documentation=https://github.com/mikegio27/go-input-remapper
+After=systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=simple
+# Config lives system-wide here by default. Point this at a user's config with
+# --config-dir /home/<user>/.config/go-input-remapper for a single-user desktop.
+ExecStart=/usr/local/bin/go-input-remapper daemon --config-dir /etc/go-input-remapper
+Restart=on-failure
+RestartSec=2
+
+# Needs read on /dev/input/event* and write on /dev/uinput.
+SupplementaryGroups=input
+DeviceAllow=/dev/uinput rw
+DeviceAllow=char-input rw
+
+# Hardening (relaxed where the daemon genuinely needs access).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+RuntimeDirectory=go-input-remapper
+# The daemon persists active_profile back to its config dir (set_profile), so the
+# config dir must be writable. Adjust if you move config elsewhere (a user's
+# ~/.config needs ProtectHome relaxed and that path added here instead).
+ReadWritePaths=/etc/go-input-remapper /run
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

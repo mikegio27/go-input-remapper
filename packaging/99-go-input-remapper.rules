@@ -1,0 +1,14 @@
+# go-input-remapper udev rules
+#
+# Grant the `input` group read access to event devices and read/write access to
+# uinput, so the daemon (running as a member of `input`) can grab devices and
+# create virtual ones without root. Install to /etc/udev/rules.d/ then reload:
+#
+#   sudo cp packaging/99-go-input-remapper.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# static_node ensures /dev/uinput exists with the right group even before the
+# module is first used (pair with packaging/uinput.conf).
+
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"
+KERNEL=="event*", SUBSYSTEM=="input", GROUP="input", MODE="0660"
