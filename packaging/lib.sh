@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Shared helpers for install.sh and update.sh: locating/installing the binary,
-# either by downloading a prebuilt release asset (no Go required) or, failing
-# that, building from source. Sourced — not run directly.
+# Shared helpers for install-system.sh and update.sh: locating/installing the
+# binary, either by downloading a prebuilt release asset (no Go required) or,
+# failing that, building from source. Sourced — not run directly.
 
 REPO="mikegio27/go-input-remapper"
 BIN="${BIN:-/usr/local/bin/go-input-remapper}"
