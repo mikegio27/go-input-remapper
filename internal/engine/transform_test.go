@@ -38,34 +38,34 @@ func TestApply(t *testing.T) {
 
 	t.Run("remap rewrites code and preserves value", func(t *testing.T) {
 		for _, value := range []int32{1, 0, 2} { // down, up, repeat
-			out := rs.Apply(keyEv(evdev.KEY_CAPSLOCK, value))
-			if len(out) != 1 {
-				t.Fatalf("value %d: got %d events, want 1", value, len(out))
+			out, emit := rs.Apply(keyEv(evdev.KEY_CAPSLOCK, value))
+			if !emit {
+				t.Fatalf("value %d: expected an emitted event", value)
 			}
-			if out[0].Code != evdev.KEY_ESC || out[0].Value != value {
-				t.Errorf("value %d: got %v/%d, want KEY_ESC/%d", value, out[0].Code, out[0].Value, value)
+			if out.Code != evdev.KEY_ESC || out.Value != value {
+				t.Errorf("value %d: got %v/%d, want KEY_ESC/%d", value, out.Code, out.Value, value)
 			}
 		}
 	})
 
 	t.Run("suppressed key yields nothing", func(t *testing.T) {
-		if out := rs.Apply(keyEv(evdev.KEY_SCROLLLOCK, 1)); out != nil {
-			t.Errorf("expected nil, got %v", out)
+		if _, emit := rs.Apply(keyEv(evdev.KEY_SCROLLLOCK, 1)); emit {
+			t.Error("expected suppression (emit=false)")
 		}
 	})
 
 	t.Run("unmapped key passes through", func(t *testing.T) {
-		out := rs.Apply(keyEv(evdev.KEY_A, 1))
-		if len(out) != 1 || out[0].Code != evdev.KEY_A {
-			t.Errorf("expected passthrough of KEY_A, got %v", out)
+		out, emit := rs.Apply(keyEv(evdev.KEY_A, 1))
+		if !emit || out.Code != evdev.KEY_A {
+			t.Errorf("expected passthrough of KEY_A, got emit=%v %v", emit, out)
 		}
 	})
 
 	t.Run("non-key event passes through", func(t *testing.T) {
 		rel := evdev.InputEvent{Type: evdev.EV_REL, Code: evdev.REL_X, Value: 5}
-		out := rs.Apply(rel)
-		if len(out) != 1 || out[0] != rel {
-			t.Errorf("expected passthrough of REL_X, got %v", out)
+		out, emit := rs.Apply(rel)
+		if !emit || out != rel {
+			t.Errorf("expected passthrough of REL_X, got emit=%v %v", emit, out)
 		}
 	})
 }

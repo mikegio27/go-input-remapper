@@ -23,33 +23,38 @@ func newProcessor(rules Ruleset, macros []compiledMacro) *processor {
 	}
 }
 
-// process handles one EV_KEY event and returns the events to emit in its place
-// plus a macro to fire, if the event completed a trigger chord. A fired macro's
-// own completing key is suppressed (and so are its repeats and release), so it
-// does not also pass through. Non-EV_KEY events should not be passed here — the
-// run loop forwards them directly.
-func (p *processor) process(ev evdev.InputEvent) ([]evdev.InputEvent, *compiledMacro) {
+// process handles one EV_KEY event and returns the event to emit in its place
+// (with emit=false meaning suppress/emit nothing) plus a macro to fire, if the
+// event completed a trigger chord. A fired macro's own completing key is
+// suppressed (and so are its repeats and release), so it does not also pass
+// through. Non-EV_KEY events should not be passed here — the run loop forwards
+// them directly. The single-value (not slice) return keeps the hot path
+// allocation-free; see Ruleset.Apply.
+func (p *processor) process(ev evdev.InputEvent) (out evdev.InputEvent, emit bool, macro *compiledMacro) {
 	code := ev.Code
 	switch ev.Value {
 	case keyDown:
 		p.held[code] = true
 		if m := p.firedBy(code); m != nil {
 			p.suppressed[code] = true
-			return nil, m
+			return evdev.InputEvent{}, false, m
 		}
-		return p.rules.Apply(ev), nil
+		out, emit = p.rules.Apply(ev)
+		return out, emit, nil
 	case keyUp:
 		delete(p.held, code)
 		if p.suppressed[code] {
 			delete(p.suppressed, code)
-			return nil, nil
+			return evdev.InputEvent{}, false, nil
 		}
-		return p.rules.Apply(ev), nil
+		out, emit = p.rules.Apply(ev)
+		return out, emit, nil
 	default: // key repeat (value 2) and anything else
 		if p.suppressed[code] {
-			return nil, nil
+			return evdev.InputEvent{}, false, nil
 		}
-		return p.rules.Apply(ev), nil
+		out, emit = p.rules.Apply(ev)
+		return out, emit, nil
 	}
 }
 

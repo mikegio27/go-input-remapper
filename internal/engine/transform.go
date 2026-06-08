@@ -53,21 +53,26 @@ func CompileRemaps(remaps []config.Remap) (Ruleset, []evdev.EvCode, error) {
 	return rs, extra, nil
 }
 
-// Apply returns the events to emit in place of ev. A remapped key yields one
-// event with its code rewritten (preserving the press/release/repeat value, so
-// up/down stay paired); a suppressed key yields nothing; everything else passes
-// through unchanged. EV_SYN frame markers are handled by the run loop, not here.
-func (rs Ruleset) Apply(ev evdev.InputEvent) []evdev.InputEvent {
+// Apply returns the event to emit in place of ev and whether to emit it at all. A
+// remapped key yields its code rewritten (preserving the press/release/repeat
+// value, so up/down stay paired); a suppressed key yields emit=false; everything
+// else passes through unchanged. EV_SYN frame markers are handled by the run loop,
+// not here.
+//
+// It returns a single value rather than a slice because a remap is always 1:1 (or
+// 0 when suppressed) — keeping the per-event hot path allocation-free, which
+// matters for a daemon processing a high-polling-rate device continuously.
+func (rs Ruleset) Apply(ev evdev.InputEvent) (out evdev.InputEvent, emit bool) {
 	if ev.Type != evdev.EV_KEY {
-		return []evdev.InputEvent{ev}
+		return ev, true
 	}
 	action, ok := rs.keys[ev.Code]
 	if !ok {
-		return []evdev.InputEvent{ev}
+		return ev, true
 	}
 	if action.suppress {
-		return nil
+		return evdev.InputEvent{}, false
 	}
 	ev.Code = action.to
-	return []evdev.InputEvent{ev}
+	return ev, true
 }

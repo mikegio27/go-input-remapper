@@ -120,9 +120,11 @@ func (e *Engine) Run() error {
 		if e.emitCapture(ev) {
 			continue
 		}
-		out, macro := e.proc.process(ev)
-		if err := e.writeFrame(out); err != nil {
-			return err
+		out, emit, macro := e.proc.process(ev)
+		if emit {
+			if err := e.write(out); err != nil {
+				return err
+			}
 		}
 		if macro != nil {
 			e.startMacro(macro)
@@ -185,22 +187,6 @@ func (e *Engine) write(ev evdev.InputEvent) error {
 	e.outMu.Lock()
 	defer e.outMu.Unlock()
 	return e.vdev.Write(ev)
-}
-
-// writeFrame emits a batch of events atomically with respect to macro injection.
-// An empty batch (a suppressed key) writes nothing.
-func (e *Engine) writeFrame(evs []evdev.InputEvent) error {
-	if len(evs) == 0 {
-		return nil
-	}
-	e.outMu.Lock()
-	defer e.outMu.Unlock()
-	for _, ev := range evs {
-		if err := e.vdev.Write(ev); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Name returns the engine's virtual device name.

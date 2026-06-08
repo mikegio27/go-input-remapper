@@ -71,9 +71,9 @@ func TestProcessorRemapPassthrough(t *testing.T) {
 	rules, _, _ := CompileRemaps([]config.Remap{{From: "KEY_CAPSLOCK", To: "KEY_ESC"}})
 	p := newProcessor(rules, nil)
 
-	out, m := p.process(keyEvent(evdev.KEY_CAPSLOCK, keyDown))
-	if m != nil || len(out) != 1 || out[0].Code != evdev.KEY_ESC {
-		t.Fatalf("expected remap to KEY_ESC, got out=%+v macro=%v", out, m)
+	out, emit, m := p.process(keyEvent(evdev.KEY_CAPSLOCK, keyDown))
+	if m != nil || !emit || out.Code != evdev.KEY_ESC {
+		t.Fatalf("expected remap to KEY_ESC, got out=%+v emit=%v macro=%v", out, emit, m)
 	}
 }
 
@@ -84,19 +84,19 @@ func TestProcessorSingleKeyTrigger(t *testing.T) {
 	p := newProcessor(Ruleset{keys: map[evdev.EvCode]keyAction{}}, macros)
 
 	// Down completes the (single-key) trigger: macro fires, key suppressed.
-	out, fired := p.process(keyEvent(evdev.BTN_SIDE, keyDown))
-	if fired == nil || len(out) != 0 {
-		t.Fatalf("expected fire+suppress on down, got out=%+v fired=%v", out, fired)
+	_, emit, fired := p.process(keyEvent(evdev.BTN_SIDE, keyDown))
+	if fired == nil || emit {
+		t.Fatalf("expected fire+suppress on down, got emit=%v fired=%v", emit, fired)
 	}
 	// Repeat while held is dropped and does not re-fire.
-	out, fired = p.process(keyEvent(evdev.BTN_SIDE, 2))
-	if fired != nil || len(out) != 0 {
-		t.Fatalf("expected repeat suppressed, got out=%+v fired=%v", out, fired)
+	_, emit, fired = p.process(keyEvent(evdev.BTN_SIDE, 2))
+	if fired != nil || emit {
+		t.Fatalf("expected repeat suppressed, got emit=%v fired=%v", emit, fired)
 	}
 	// Release is suppressed too.
-	out, fired = p.process(keyEvent(evdev.BTN_SIDE, keyUp))
-	if fired != nil || len(out) != 0 {
-		t.Fatalf("expected release suppressed, got out=%+v fired=%v", out, fired)
+	_, emit, fired = p.process(keyEvent(evdev.BTN_SIDE, keyUp))
+	if fired != nil || emit {
+		t.Fatalf("expected release suppressed, got emit=%v fired=%v", emit, fired)
 	}
 }
 
@@ -107,19 +107,19 @@ func TestProcessorChordTrigger(t *testing.T) {
 	p := newProcessor(Ruleset{keys: map[evdev.EvCode]keyAction{}}, macros)
 
 	// Ctrl down: not a completion, passes through.
-	out, fired := p.process(keyEvent(evdev.KEY_LEFTCTRL, keyDown))
-	if fired != nil || len(out) != 1 || out[0].Code != evdev.KEY_LEFTCTRL {
-		t.Fatalf("expected Ctrl passthrough, got out=%+v fired=%v", out, fired)
+	out, emit, fired := p.process(keyEvent(evdev.KEY_LEFTCTRL, keyDown))
+	if fired != nil || !emit || out.Code != evdev.KEY_LEFTCTRL {
+		t.Fatalf("expected Ctrl passthrough, got out=%+v emit=%v fired=%v", out, emit, fired)
 	}
 	// J down completes the chord: fires, J suppressed.
-	out, fired = p.process(keyEvent(evdev.KEY_J, keyDown))
-	if fired == nil || len(out) != 0 {
-		t.Fatalf("expected chord fire on J, got out=%+v fired=%v", out, fired)
+	_, emit, fired = p.process(keyEvent(evdev.KEY_J, keyDown))
+	if fired == nil || emit {
+		t.Fatalf("expected chord fire on J, got emit=%v fired=%v", emit, fired)
 	}
 	// Ctrl release still passes through (it was never suppressed).
-	out, fired = p.process(keyEvent(evdev.KEY_LEFTCTRL, keyUp))
-	if fired != nil || len(out) != 1 {
-		t.Fatalf("expected Ctrl release passthrough, got out=%+v fired=%v", out, fired)
+	out, emit, fired = p.process(keyEvent(evdev.KEY_LEFTCTRL, keyUp))
+	if fired != nil || !emit {
+		t.Fatalf("expected Ctrl release passthrough, got out=%+v emit=%v fired=%v", out, emit, fired)
 	}
 }
 
