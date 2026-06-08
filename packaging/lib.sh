@@ -24,10 +24,18 @@ detect_arch() {
 }
 
 # latest_release_tag prints the newest published release tag, or empty if there
-# are no releases yet / the API is unreachable (first run before any release).
+# are no releases yet / the API is unreachable / rate-limited. It is best-effort
+# and ALWAYS exits 0: a caller doing `tag="$(latest_release_tag)"` under
+# `set -e` must not be aborted on failure.
+#
+# Capture the response into a variable before parsing it. Piping curl straight
+# into `grep -m1` makes grep close the pipe after the first match, and curl —
+# still writing the (large) release JSON — then dies with a write error (exit 23),
+# which `set -e`+`pipefail` would turn into a fatal install abort.
 latest_release_tag() {
-	gir_curl "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
-		grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
+	local json
+	json="$(gir_curl "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null)" || return 0
+	printf '%s\n' "$json" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' || return 0
 }
 
 # source_version derives a version string for a source build: the git description
@@ -97,7 +105,7 @@ install_binary() {
 			tag="$GIR_VERSION"
 		else
 			echo "==> checking for the latest release (api.github.com)…"
-			tag="$(latest_release_tag)"
+			tag="$(latest_release_tag || true)" # never let a query failure abort under set -e
 		fi
 		if [[ -n "$tag" ]]; then
 			if download_release_binary "$tag" "$arch"; then
@@ -105,7 +113,7 @@ install_binary() {
 			fi
 			echo "==> release download failed; falling back to building from source" >&2
 		else
-			echo "==> no published release found; building from source" >&2
+			echo "==> could not determine the latest release (api.github.com unreachable or rate-limited); building from source" >&2
 		fi
 	fi
 	build_from_source
