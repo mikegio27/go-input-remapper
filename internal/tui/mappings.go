@@ -96,8 +96,8 @@ func (m *Model) deviceInfoForMatcher(match config.DeviceMatcher) control.DeviceI
 func (m *Model) mappingsView() string {
 	profile := m.activeProfile
 	if profile == "" {
-		return panel("Mappings", mutedStyle.Render(
-			"No active profile.\nActivate one in the Profiles tab to see its mappings."), true)
+		return m.singleCentered("Mappings", mutedStyle.Render(
+			"No active profile.\nActivate one in the Profiles tab to see its mappings."))
 	}
 
 	rows := m.mappingRows()
@@ -105,38 +105,61 @@ func (m *Model) mappingsView() string {
 		m.mapCursor = max(0, len(rows)-1)
 	}
 
-	var out []string
-	out = append(out, dimStyle.Render("profile: ")+profile, "")
 	if len(rows) == 0 {
-		out = append(out, mutedStyle.Render(
-			"No mappings in this profile yet.\nPress 'a' to add one (pick a device, then remap or macro)."))
-		return panel("Mappings", lipgloss.JoinVertical(lipgloss.Left, out...), true)
+		hint := lipgloss.JoinVertical(lipgloss.Center,
+			panelTitleStyle.Render("No mappings in "+profile+" yet"),
+			"",
+			mutedStyle.Render("Press 'a' to add one:"),
+			dimStyle.Render("pick a device, then a remap or a macro."),
+		)
+		return m.singleCentered("Mappings", hint)
 	}
 
-	out = append(out, dimStyle.Render(fmt.Sprintf("  %-22s %-16s %s", "DEVICE", "FROM", "TO / MACRO")))
+	innerW := panelInnerWidth(m.bodyW)
+	// Responsive device-label column: shrink it on narrow terminals.
+	avail := innerW - 2
+	devW, fromW := 22, 16
+	if avail < 56 {
+		devW, fromW = 12, 12
+	}
+	toBudget := max(6, avail-devW-1-fromW-3) // " → " / "macro: " spacing
+	out := []string{
+		dimStyle.Render("profile: ") + profile,
+		"",
+		dimStyle.Render(fmt.Sprintf("  %-*s %-*s %s", devW, "DEVICE", fromW, "FROM", "TO / MACRO")),
+	}
 	for i, r := range rows {
-		cursor := "  "
+		dev := truncate(r.devLabel, devW)
 		if i == m.mapCursor {
-			cursor = cursorRowStyle.Render("▶ ")
+			var line string
+			if r.isMacro {
+				line = fmt.Sprintf("%-*s %-*s macro: %s", devW, dev, fromW, truncate(strings.Join(r.trigger, "+"), fromW), truncate(r.macro, toBudget))
+			} else {
+				to := r.to
+				if to == "" {
+					to = "(suppressed)"
+				}
+				line = fmt.Sprintf("%-*s %-*s → %s", devW, dev, fromW, truncate(r.from, fromW), truncate(to, toBudget))
+			}
+			out = append(out, selBar("▶ "+line, innerW))
+			continue
 		}
-		dev := truncate(r.devLabel, 22)
 		var line string
 		if r.isMacro {
-			trig := strings.Join(r.trigger, "+")
-			line = fmt.Sprintf("%-22s %-16s %s", dev, trig, dimStyle.Render("macro: ")+r.macro)
+			trig := truncate(strings.Join(r.trigger, "+"), fromW)
+			line = fmt.Sprintf("%-*s %-*s %s", devW, dev, fromW, trig, dimStyle.Render("macro: ")+truncate(r.macro, toBudget))
 		} else {
 			to := r.to
 			if to == "" {
 				to = dimStyle.Render("(suppressed)")
+			} else {
+				to = truncate(to, toBudget)
 			}
-			line = fmt.Sprintf("%-22s %-16s → %s", dev, r.from, to)
+			line = fmt.Sprintf("%-*s %-*s → %s", devW, dev, fromW, truncate(r.from, fromW), to)
 		}
-		if i == m.mapCursor {
-			line = cursorRowStyle.Render(line)
-		}
-		out = append(out, cursor+line)
+		out = append(out, "  "+line)
 	}
-	return panel("Mappings", lipgloss.JoinVertical(lipgloss.Left, out...), true)
+	return fillPanel("Mappings", lipgloss.JoinVertical(lipgloss.Left, out...), true, m.bodyW, m.bodyH)
 }
 
 // matcherLabel renders a device matcher as a short human label for the table.

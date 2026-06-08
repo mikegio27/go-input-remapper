@@ -184,6 +184,17 @@ run `sudo packaging/update.sh` — it stops the service, installs the latest bin
 (prebuilt release when available, else a source build), and restarts. Re-run the
 full `install.sh` only when the udev rules or uinput module config change.
 
+To test local, unreleased changes, build straight from your checkout:
+
+```bash
+sudo packaging/update.sh --source       # build & deploy THIS checkout
+sudo packaging/update.sh --version v1.2.0  # or pin a specific release tag
+```
+
+Prefer these flags over the `GIR_BUILD_FROM_SOURCE` / `GIR_VERSION` env vars —
+`sudo` resets the environment, so a var exported in your shell won't reach the
+script unless you set it on the `sudo` command line itself.
+
 ### Uninstalling
 
 ```
