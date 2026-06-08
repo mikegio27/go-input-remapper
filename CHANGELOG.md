@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/mikegio27/go-input-remapper/compare/v1.1.1...v1.1.2) (2026-06-08)
+
+
+### Bug Fixes
+
+* lib.sh ([61fc348](https://github.com/mikegio27/go-input-remapper/commit/61fc348863b2d19e90aec2a569c302ed14a25a61))
+* lib.sh ([af6e171](https://github.com/mikegio27/go-input-remapper/commit/af6e17163fd2b9d8e3fe5a51d614d6cd3b1b1a9f))
+
 ## [1.1.1](https://github.com/mikegio27/go-input-remapper/compare/v1.1.0...v1.1.1) (2026-06-08)
 
 
