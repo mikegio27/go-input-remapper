@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mikegio27/go-input-remapper/internal/config"
 )
 
 func (m *Model) profilesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -76,43 +77,101 @@ func sanitizeProfileName(s string) string {
 }
 
 func (m *Model) profilesView() string {
-	var rows []string
-
 	if len(m.profileNames) == 0 {
-		rows = append(rows, mutedStyle.Render("No profiles yet — press 'n' to create one."))
+		return m.singleCentered("Profiles", mutedStyle.Render("No profiles yet — press 'n' to create one."))
 	}
+
+	// The new-profile form takes the detail pane while it's open; otherwise a
+	// summary of the selected profile does.
+	rightTitle, rightBody := m.profileDetail()
+	lw, rw := m.paneWidths(rightBody != "")
+	listOuter := m.bodyW
+	if rw > 0 {
+		listOuter = lw
+	}
+	innerW := panelInnerWidth(listOuter)
+
+	var rows []string
 	for i, name := range m.profileNames {
-		marker := "  "
-		label := name
-		if name == m.activeProfile {
-			marker = goodStyle.Render("★ ")
-			label = label + dimStyle.Render("  (active)")
-		}
-		cursor := "  "
-		if i == m.profCursor {
-			cursor = cursorRowStyle.Render("▶ ")
-			label = cursorRowStyle.Render(name)
-			if name == m.activeProfile {
-				label += dimStyle.Render("  (active)")
-			}
-		}
-		// Show how many device bindings each profile has.
 		count := 0
 		if p := m.cfg.Profiles[name]; p != nil {
-			count = len(p.Devices)
+			count, _ = profileCounts(p)
 		}
-		rows = append(rows, cursor+marker+label+dimStyle.Render(devCountSuffix(count)))
+		active := name == m.activeProfile
+		if i == m.profCursor {
+			label := "▶ "
+			if active {
+				label += "★ "
+			} else {
+				label += "  "
+			}
+			label += name
+			if active {
+				label += "  (active)"
+			}
+			label += devCountSuffix(count)
+			rows = append(rows, selBar(label, innerW))
+			continue
+		}
+		marker := "    "
+		label := name
+		if active {
+			marker = "  " + goodStyle.Render("★ ")
+			label += dimStyle.Render("  (active)")
+		}
+		rows = append(rows, marker+label+dimStyle.Render(devCountSuffix(count)))
 	}
-	list := panel("Profiles", lipgloss.JoinVertical(lipgloss.Left, rows...), true)
+	list := lipgloss.JoinVertical(lipgloss.Left, rows...)
+	return m.renderPanes(lw, rw, "Profiles", list, rightTitle, rightBody)
+}
 
+// profileDetail returns the detail-pane title and body for the Profiles screen:
+// the new-profile form while creating, else a summary of the selected profile.
+func (m *Model) profileDetail() (title, body string) {
 	if m.addingProfile {
 		form := lipgloss.JoinVertical(lipgloss.Left,
-			"new profile: "+m.profileInput.View(),
-			dimStyle.Render("enter to create · esc cancel"),
+			"name: "+m.profileInput.View(),
+			"",
+			dimStyle.Render("enter create · esc cancel"),
 		)
-		return joinPanels(m.width, list, panel("New profile", form, false))
+		return "New profile", form
 	}
-	return list
+	name, ok := m.selectedProfile()
+	if !ok {
+		return "", ""
+	}
+	p := m.cfg.Profiles[name]
+	if p == nil {
+		return "", ""
+	}
+	devices, maps := profileCounts(p)
+	state := dimStyle.Render("inactive")
+	if name == m.activeProfile {
+		state = goodStyle.Render("active")
+	}
+	lines := []string{
+		panelTitleStyle.Render(name),
+		"",
+		"state:    " + state,
+		"devices:  " + itoa(devices),
+		"mappings: " + itoa(maps),
+	}
+	return "Selected", lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// profileCounts reports a profile's effective device and mapping totals. A device
+// binding with no remaps or macros is a placeholder the daemon never grabs (see
+// config.DeviceBinding.HasRules), so it doesn't count as a device — keeping the
+// displayed "0 devices" consistent with "0 mappings".
+func profileCounts(p *config.Profile) (devices, mappings int) {
+	for _, b := range p.Devices {
+		n := len(b.Remaps) + len(b.Macros)
+		mappings += n
+		if n > 0 {
+			devices++
+		}
+	}
+	return devices, mappings
 }
 
 func devCountSuffix(n int) string {

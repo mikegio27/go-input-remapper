@@ -39,8 +39,6 @@ func (m *Model) statusView() string {
 		"config:  "+dimStyle.Render(m.opts.ConfigDir),
 		"profile: "+profile,
 	)
-	daemonPanel := panel("Daemon", info, true)
-
 	var body string
 	switch {
 	case !m.daemonUp:
@@ -54,5 +52,7 @@ func (m *Model) statusView() string {
 		}
 		body = lipgloss.JoinVertical(lipgloss.Left, rows...)
 	}
-	return joinPanels(m.width, daemonPanel, panel("Bound devices", body, false))
+
+	lw, rw := m.paneWidths(true)
+	return m.renderPanes(lw, rw, "Daemon", info, "Bound devices", body)
 }

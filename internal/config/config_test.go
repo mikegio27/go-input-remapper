@@ -215,6 +215,23 @@ func TestValidate(t *testing.T) {
 	})
 }
 
+func TestBindingHasRules(t *testing.T) {
+	cases := []struct {
+		name string
+		b    DeviceBinding
+		want bool
+	}{
+		{"empty placeholder", DeviceBinding{Match: DeviceMatcher{Name: "kbd"}}, false},
+		{"has a remap", DeviceBinding{Remaps: []Remap{{From: "KEY_A", To: "KEY_B"}}}, true},
+		{"has a macro", DeviceBinding{Macros: []Macro{{Name: "m", Trigger: []string{"KEY_A"}}}}, true},
+	}
+	for _, c := range cases {
+		if got := c.b.HasRules(); got != c.want {
+			t.Errorf("%s: HasRules() = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (func() bool {
 		for i := 0; i+len(sub) <= len(s); i++ {

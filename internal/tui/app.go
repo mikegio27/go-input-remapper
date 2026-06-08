@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -58,6 +59,9 @@ type Model struct {
 	opts          Options
 	screen        screen
 	width, height int
+	// bodyW/bodyH are the frame region available to the active screen body,
+	// computed in View between the header and footer so panels fill the window.
+	bodyW, bodyH int
 
 	// daemon-derived state
 	daemonUp      bool
@@ -275,11 +279,29 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders header, the active body, and the footer.
+// View renders header, the active body filling the frame, and the footer.
 func (m *Model) View() string {
 	if m.quitting {
 		return ""
 	}
+	// Overlays own the whole frame.
+	if m.addFlow != nil {
+		return m.addFlowOverlay()
+	}
+	if m.capture != nil {
+		return m.captureOverlay()
+	}
+
+	header, footer := m.header(), m.footer()
+	// Hand the body the space between header and footer so its panels can stretch
+	// to the window edges instead of hugging their content at the top-left.
+	m.bodyW = m.width
+	if m.height > 0 {
+		m.bodyH = max(m.height-lipgloss.Height(header)-lipgloss.Height(footer), panelChromeH+1)
+	} else {
+		m.bodyH = 0
+	}
+
 	body := ""
 	switch {
 	case m.editor != nil:
@@ -299,14 +321,60 @@ func (m *Model) View() string {
 		}
 	}
 
-	view := lipgloss.JoinVertical(lipgloss.Left, m.header(), body, m.footer())
-	if m.addFlow != nil {
-		view = m.addFlowOverlay() // wizard overlay replaces the frame
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+}
+
+// paneWidths splits the body into a master/detail pair when a detail pane is
+// wanted and there's room. right==0 means render a single full-width pane (no
+// detail requested, the terminal is too narrow to split, or size isn't known).
+func (m *Model) paneWidths(hasDetail bool) (left, right int) {
+	if !hasDetail || m.bodyW <= 0 {
+		return m.bodyW, 0
 	}
-	if m.capture != nil {
-		view = m.captureOverlay() // overlay replaces the frame while capturing
+	right = m.bodyW * 2 / 5
+	switch {
+	case right < 26:
+		right = 26
+	case right > 46:
+		right = 46
 	}
-	return view
+	left = m.bodyW - right - 1 // 1-col gap between the panes
+	if left < 40 {
+		return m.bodyW, 0 // too tight to split cleanly; give it all to the list
+	}
+	return left, right
+}
+
+// renderPanes lays out a master (and optional detail) panel filling the body. The
+// master is always focused; the detail pane is informational. With no detail it
+// fills the whole width; when the split would be too tight it stacks vertically
+// rather than dropping the detail.
+func (m *Model) renderPanes(lw, rw int, lTitle, lBody string, rTitle, rBody string) string {
+	if rBody == "" {
+		return fillPanel(lTitle, lBody, true, m.bodyW, m.bodyH)
+	}
+	if rw == 0 {
+		// Stack: size the detail pane to its content and give the list the rest, so
+		// the two together fill the body exactly. If the detail leaves no room for a
+		// usable list, drop it and let the list fill the whole frame.
+		bot := fillPanel(rTitle, rBody, false, m.bodyW, 0)
+		topH := m.bodyH - lipgloss.Height(bot)
+		if topH < panelChromeH+1 {
+			return fillPanel(lTitle, lBody, true, m.bodyW, m.bodyH)
+		}
+		top := fillPanel(lTitle, lBody, true, m.bodyW, topH)
+		return lipgloss.JoinVertical(lipgloss.Left, top, bot)
+	}
+	left := fillPanel(lTitle, lBody, true, lw, m.bodyH)
+	right := fillPanel(rTitle, rBody, false, rw, m.bodyH)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right)
+}
+
+// singleCentered renders one full-frame panel with its body centered — for empty
+// states that would otherwise float in the top-left of a large panel.
+func (m *Model) singleCentered(title, body string) string {
+	placed := centerBody(body, panelInnerWidth(m.bodyW), panelInnerHeight(m.bodyH))
+	return fillPanel(title, placed, true, m.bodyW, m.bodyH)
 }
 
 // header renders the title bar, active profile, daemon indicator, and tabs.
@@ -362,15 +430,21 @@ func (m *Model) footer() string {
 	default:
 		switch m.screen {
 		case screenDevices:
-			toggle := "a show all"
+			toggle, toggleShort := "a show all", "a all"
 			if m.showAll {
-				toggle = "a remappable only"
+				toggle, toggleShort = "a remappable only", "a remap-only"
 			}
-			hints = "↑/↓ move · enter remaps · m macros · " + toggle + " · tab switch · r refresh · q quit"
+			hints = m.hint(
+				"↑/↓ move · enter remaps · m macros · "+toggle+" · tab switch · r refresh · q quit",
+				"↑↓ · enter remap · m macro · "+toggleShort+" · ↹ tab · r · q")
 		case screenProfiles:
-			hints = "↑/↓ move · enter activate · n new · d delete · tab switch · q quit"
+			hints = m.hint(
+				"↑/↓ move · enter activate · n new · d delete · tab switch · q quit",
+				"↑↓ · enter activate · n new · d del · ↹ tab · q")
 		case screenMappings:
-			hints = "↑/↓ move · enter edit · a add new · tab switch · r refresh · q quit"
+			hints = m.hint(
+				"↑/↓ move · enter edit · a add new · tab switch · r refresh · q quit",
+				"↑↓ · enter edit · a add · ↹ tab · r · q")
 		case screenStatus:
 			if m.daemonUp {
 				hints = "k stop daemon · tab switch · r refresh · q quit"
@@ -387,7 +461,36 @@ func (m *Model) footer() string {
 		}
 		line = lipgloss.JoinVertical(lipgloss.Left, footerStyle.Render(style.Render(m.flash)), line)
 	}
-	return line
+	return lipgloss.JoinVertical(lipgloss.Left, m.statusStrip(), line)
+}
+
+// statusStrip is the always-on at-a-glance line above the footer hints: active
+// profile, how many devices are bound, and the daemon's state. It grounds the
+// layout and fills space with information rather than emptiness.
+func (m *Model) statusStrip() string {
+	profile := m.activeProfile
+	if profile == "" {
+		profile = "(none)"
+	}
+	parts := []string{
+		"profile " + tabActiveStyle.Render(profile),
+		itoa(len(m.engines)) + " bound",
+		dot(m.daemonUp) + " daemon",
+	}
+	if m.daemonPID != 0 {
+		parts = append(parts, dimStyle.Render("pid "+itoa(m.daemonPID)))
+	}
+	return stripStyle.Render(strings.Join(parts, dimStyle.Render(" · ")))
+}
+
+// hint returns full when it fits the terminal width (with a little slack for the
+// footer's padding), else a compact variant, so the key-hint line never overflows
+// a narrow window.
+func (m *Model) hint(full, short string) string {
+	if m.width > 0 && m.width < lipgloss.Width(full)+2 {
+		return short
+	}
+	return full
 }
 
 func (m *Model) setFlash(text string, isErr bool) {

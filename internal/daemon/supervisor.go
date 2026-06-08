@@ -184,7 +184,8 @@ func (s *Supervisor) teardownAllLocked() {
 // tryBindLocked attempts to bind the device at path to the first matching binding
 // in the active profile, building and starting an engine on success. It is a
 // no-op if the path is already bound, is one of our virtual devices, doesn't
-// match any binding, or can't be opened/grabbed. Callers must hold s.mu.
+// match any binding, matches a binding that defines no remaps or macros, or
+// can't be opened/grabbed. Callers must hold s.mu.
 func (s *Supervisor) tryBindLocked(path string, attempts int) {
 	if _, exists := s.engines[path]; exists {
 		return
@@ -195,6 +196,13 @@ func (s *Supervisor) tryBindLocked(path string, attempts int) {
 	}
 	binding, matched := matchBinding(s.profile, id)
 	if !matched {
+		d.Close()
+		return
+	}
+	if !binding.HasRules() {
+		// Device is listed in the profile but has no remaps or macros yet; leave
+		// it ungrabbed so it passes through natively. It binds once a rule exists
+		// and the config is reloaded.
 		d.Close()
 		return
 	}

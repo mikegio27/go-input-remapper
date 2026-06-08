@@ -40,6 +40,15 @@ type DeviceBinding struct {
 	Macros []Macro       `toml:"macro"`
 }
 
+// HasRules reports whether the binding actually does anything — i.e. defines at
+// least one remap or macro. A binding with neither is a declarative placeholder
+// (a device added to a profile but not yet mapped); the daemon must not grab it,
+// since grabbing would impose a userspace passthrough roundtrip and crash-risk
+// for no functional gain.
+func (b DeviceBinding) HasRules() bool {
+	return len(b.Remaps) > 0 || len(b.Macros) > 0
+}
+
 // DeviceMatcher selects physical devices by stable attributes rather than the
 // volatile /dev/input/eventX path. Empty fields are ignored. Match precedence
 // (strongest first) is applied by the resolver: Uniq, then Vendor+Product+Name,

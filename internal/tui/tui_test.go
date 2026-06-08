@@ -6,9 +6,29 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/mikegio27/go-input-remapper/internal/config"
 	"github.com/mikegio27/go-input-remapper/internal/control"
 )
+
+// TestViewFillsFrame checks every top-level screen renders to exactly the
+// terminal dimensions — the layout claims the whole canvas instead of hugging
+// its content in the top-left.
+func TestViewFillsFrame(t *testing.T) {
+	m, _ := newTestModel(t)
+	const w, h = 120, 32
+	m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	for _, scr := range []screen{screenDevices, screenMappings, screenProfiles, screenStatus} {
+		m.screen = scr
+		v := m.View()
+		if got := lipgloss.Width(v); got != w {
+			t.Errorf("screen %v width = %d, want %d", scr, got, w)
+		}
+		if got := lipgloss.Height(v); got != h {
+			t.Errorf("screen %v height = %d, want %d", scr, got, h)
+		}
+	}
+}
 
 // TestConfigErrorKeepsProfiles checks a config-load failure never blanks the
 // Profiles list (the bug where a transient read error left it empty), and that a
@@ -91,6 +111,60 @@ func TestModelRendersScreens(t *testing.T) {
 	m.Update(key("tab")) // -> status
 	if !strings.Contains(m.View(), "daemon") {
 		t.Error("status view should mention the daemon")
+	}
+}
+
+// TestProfileCounts checks an empty placeholder binding (no remaps/macros) is not
+// counted as a device, so the Profiles "devices" total tracks "mappings": 0 ⇔ 0.
+func TestProfileCounts(t *testing.T) {
+	cases := []struct {
+		name             string
+		p                *config.Profile
+		wantDev, wantMap int
+	}{
+		{"empty placeholder", &config.Profile{Devices: []config.DeviceBinding{{Match: config.DeviceMatcher{Name: "x"}}}}, 0, 0},
+		{"one remap", &config.Profile{Devices: []config.DeviceBinding{{Remaps: []config.Remap{{From: "KEY_A", To: "KEY_B"}}}}}, 1, 1},
+		{"one real + one empty", &config.Profile{Devices: []config.DeviceBinding{
+			{Remaps: []config.Remap{{From: "KEY_A", To: "KEY_B"}}, Macros: []config.Macro{{Name: "m"}}},
+			{Match: config.DeviceMatcher{Name: "empty"}},
+		}}, 1, 2},
+	}
+	for _, c := range cases {
+		if d, mp := profileCounts(c.p); d != c.wantDev || mp != c.wantMap {
+			t.Errorf("%s: got devices=%d mappings=%d, want %d/%d", c.name, d, mp, c.wantDev, c.wantMap)
+		}
+	}
+}
+
+// TestResponsiveNoOverflow checks no screen renders past the terminal bounds at
+// narrow widths — the table columns and footer hints degrade instead of spilling.
+func TestResponsiveNoOverflow(t *testing.T) {
+	m, _ := newTestModel(t)
+	m.cfg.Profiles["default"] = &config.Profile{Name: "default", Devices: []config.DeviceBinding{{
+		Match:  config.DeviceMatcher{Name: "SteelSeries Aerox 9 Wireless", Vendor: 0x1038, Product: 0x185a},
+		Remaps: []config.Remap{{From: "KEY_CAPSLOCK", To: "KEY_ESC"}},
+		Macros: []config.Macro{{Name: "greeting-macro", Trigger: []string{"KEY_LEFTCTRL", "KEY_G"}}},
+	}}}
+	m.activeProfile = "default"
+	m.Update(devicesMsg{devices: []control.DeviceInfo{
+		{Path: "/dev/input/event7", Name: "SteelSeries SteelSeries Aerox 9 Wireless", Kind: "mouse",
+			Vendor: 0x1038, Product: 0x185a, Recommended: true, Bound: true, Reasons: []string{"mouse: buttons remap"}},
+	}, fromDaemon: true})
+
+	for _, dim := range [][2]int{{60, 20}, {70, 22}, {80, 24}, {120, 32}} {
+		m.Update(tea.WindowSizeMsg{Width: dim[0], Height: dim[1]})
+		for _, scr := range []screen{screenDevices, screenMappings, screenProfiles, screenStatus} {
+			m.screen = scr
+			v := m.View()
+			for _, ln := range strings.Split(v, "\n") {
+				if w := lipgloss.Width(ln); w > dim[0] {
+					t.Errorf("%dx%d screen %v: line width %d overflows: %q", dim[0], dim[1], scr, w, ln)
+				}
+			}
+			if h := lipgloss.Height(v); h > dim[1] {
+				t.Errorf("%dx%d screen %v: height %d overflows", dim[0], dim[1], scr, h)
+			}
+		}
 	}
 }
 
