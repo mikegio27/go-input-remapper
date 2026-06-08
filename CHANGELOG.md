@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/mikegio27/go-input-remapper/compare/v1.1.0...v1.1.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* release grabs if no binds. update device number in profiles if n… ([5cafb2e](https://github.com/mikegio27/go-input-remapper/commit/5cafb2e597d274067b1adf7439151f3c01a7bee6))
+* release grabs if no binds. update device number in profiles if no mappings/binds/macros, resize boxes to fill TUI better ([8c9c2fc](https://github.com/mikegio27/go-input-remapper/commit/8c9c2fcdb8adccfa5bbcb2f3c4cfc467a2f560dc))
+
 ## [1.1.0](https://github.com/mikegio27/go-input-remapper/compare/v1.0.0...v1.1.0) (2026-06-07)
 
 
