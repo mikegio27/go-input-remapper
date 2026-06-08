@@ -39,9 +39,36 @@ else
 	REF="${GIR_REF:-main}"
 	TMP="$(mktemp -d)"
 	trap 'rm -rf "$TMP"' EXIT
+	URL="https://github.com/$REPO/archive/$REF.tar.gz"
 	echo "==> fetching source snapshot ($REF)"
-	curl -fsSL "https://github.com/$REPO/archive/$REF.tar.gz" | tar xz -C "$TMP"
+	# Download to a file first (so a network failure is distinguishable from a tar
+	# failure) with timeouts, so a blocked/slow host fails fast instead of hanging
+	# this script silently — GitHub serves these archives from codeload.github.com,
+	# a different host than the raw.githubusercontent.com that serves this script,
+	# so one can be reachable while the other is not.
+	if ! curl -fSL --connect-timeout 20 --max-time 300 "$URL" -o "$TMP/src.tar.gz"; then
+		echo "error: could not download the source snapshot from $URL" >&2
+		echo "  If codeload.github.com is blocked or slow on your network, install from a" >&2
+		echo "  clone instead:" >&2
+		echo "    git clone https://github.com/$REPO" >&2
+		echo "    sudo ./go-input-remapper/install.sh" >&2
+		echo "  (or download a release tarball from https://github.com/$REPO/releases)" >&2
+		exit 1
+	fi
+	if ! tar xzf "$TMP/src.tar.gz" -C "$TMP"; then
+		echo "error: the downloaded archive could not be extracted (truncated or corrupt)" >&2
+		exit 1
+	fi
 	SRC="$(echo "$TMP"/*/)"
 fi
 
-exec bash "$SRC/packaging/install-system.sh" "$@"
+INSTALLER="$SRC/packaging/install-system.sh"
+if [[ ! -f "$INSTALLER" ]]; then
+	echo "error: installer not found at $INSTALLER (unexpected archive layout)" >&2
+	exit 1
+fi
+
+# Hand off to the real installer. Redirect stdin from /dev/null: when this script
+# arrived via 'curl | sudo bash' our stdin is the (now-closed) script pipe, and a
+# child that ever reads stdin would otherwise block on it.
+exec bash "$INSTALLER" "$@" </dev/null

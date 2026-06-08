@@ -6,6 +6,13 @@
 REPO="mikegio27/go-input-remapper"
 BIN="${BIN:-/usr/local/bin/go-input-remapper}"
 
+# Bounded curl: fail on HTTP errors, follow redirects, and never hang forever on a
+# slow/blocked host (the GitHub API and codeload live on different hosts than the
+# raw script, so they can stall independently). Used for every network call here.
+gir_curl() {
+	curl -fsSL --connect-timeout 20 --max-time 300 "$@"
+}
+
 # detect_arch maps uname -m to the Go arch used in release asset names. Prints an
 # empty string for unsupported machines (callers fall back to a source build).
 detect_arch() {
@@ -19,7 +26,7 @@ detect_arch() {
 # latest_release_tag prints the newest published release tag, or empty if there
 # are no releases yet / the API is unreachable (first run before any release).
 latest_release_tag() {
-	curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
+	gir_curl "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
 		grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
 }
 
@@ -39,13 +46,13 @@ download_release_binary() {
 	tmp="$(mktemp -d)"
 
 	echo "==> downloading prebuilt binary $asset ($tag)"
-	if ! curl -fsSL "$url" -o "$tmp/$asset"; then
+	if ! gir_curl "$url" -o "$tmp/$asset"; then
 		rm -rf "$tmp"
 		return 1
 	fi
 
 	# Verify against the release checksums when available.
-	if curl -fsSL "https://github.com/$REPO/releases/download/$tag/checksums.txt" -o "$tmp/checksums.txt"; then
+	if gir_curl "https://github.com/$REPO/releases/download/$tag/checksums.txt" -o "$tmp/checksums.txt"; then
 		if ! (cd "$tmp" && grep " $asset\$" checksums.txt | sha256sum -c -); then
 			echo "checksum verification failed for $asset" >&2
 			rm -rf "$tmp"
@@ -86,7 +93,12 @@ install_binary() {
 	arch="$(detect_arch)"
 
 	if [[ "${GIR_BUILD_FROM_SOURCE:-0}" != "1" && -n "$arch" ]]; then
-		tag="${GIR_VERSION:-$(latest_release_tag)}"
+		if [[ -n "${GIR_VERSION:-}" ]]; then
+			tag="$GIR_VERSION"
+		else
+			echo "==> checking for the latest release (api.github.com)…"
+			tag="$(latest_release_tag)"
+		fi
 		if [[ -n "$tag" ]]; then
 			if download_release_binary "$tag" "$arch"; then
 				return 0
