@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/mikegio27/nereus/compare/v1.1.2...v1.2.0) (2026-06-10)
+
+
+### Features
+
+* make a more unique name ([3bf4aed](https://github.com/mikegio27/nereus/commit/3bf4aeddd60e85853329fdaa134793436ff7787b))
+* make a more unique name - update files ([6491d9f](https://github.com/mikegio27/nereus/commit/6491d9fc595f0c1bb3cce110ce38726fc30aac55))
+
 ## [1.1.1](https://github.com/mikegio27/nereus/compare/v1.1.0...v1.1.1) (2026-06-08)
 
 
