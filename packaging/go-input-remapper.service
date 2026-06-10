@@ -1,14 +1,14 @@
 [Unit]
-Description=go-input-remapper daemon (input remapping, macros, profiles)
-Documentation=https://github.com/mikegio27/go-input-remapper
+Description=nereus daemon (input remapping, macros, profiles)
+Documentation=https://github.com/mikegio27/nereus
 After=systemd-udev-settle.service
 Wants=systemd-udev-settle.service
 
 [Service]
 Type=simple
 # Config lives system-wide here by default. Point this at a user's config with
-# --config-dir /home/<user>/.config/go-input-remapper for a single-user desktop.
-ExecStart=/usr/local/bin/go-input-remapper daemon --config-dir /etc/go-input-remapper
+# --config-dir /home/<user>/.config/nereus for a single-user desktop.
+ExecStart=/usr/local/bin/nereus daemon --config-dir /etc/nereus
 Restart=on-failure
 RestartSec=2
 
@@ -21,11 +21,11 @@ DeviceAllow=char-input rw
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-RuntimeDirectory=go-input-remapper
+RuntimeDirectory=nereus
 # The daemon persists active_profile back to its config dir (set_profile), so the
 # config dir must be writable. Adjust if you move config elsewhere (a user's
 # ~/.config needs ProtectHome relaxed and that path added here instead).
-ReadWritePaths=/etc/go-input-remapper /run
+ReadWritePaths=/etc/nereus /run
 PrivateTmp=true
 ProtectControlGroups=true
 ProtectKernelTunables=true

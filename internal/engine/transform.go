@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	evdev "github.com/mikegio27/go-evdev"
-	"github.com/mikegio27/go-input-remapper/internal/config"
+	"github.com/mikegio27/nereus/internal/config"
 )
 
 // keyAction is what a rule set does with a given key code: rewrite it to another

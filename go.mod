@@ -1,4 +1,4 @@
-module github.com/mikegio27/go-input-remapper
+module github.com/mikegio27/nereus
 
 go 1.26.3
 

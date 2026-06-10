@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/mikegio27/go-input-remapper/internal/control"
+	"github.com/mikegio27/nereus/internal/control"
 )
 
 // captureSession holds the dedicated client and stream for an active capture.

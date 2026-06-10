@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 
 	evdev "github.com/mikegio27/go-evdev"
-	"github.com/mikegio27/go-input-remapper/internal/config"
+	"github.com/mikegio27/nereus/internal/config"
 )
 
 // Engine owns one source device and the virtual device its transformed events

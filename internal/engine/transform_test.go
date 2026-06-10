@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	evdev "github.com/mikegio27/go-evdev"
-	"github.com/mikegio27/go-input-remapper/internal/config"
+	"github.com/mikegio27/nereus/internal/config"
 )
 
 func keyEv(code evdev.EvCode, value int32) evdev.InputEvent {

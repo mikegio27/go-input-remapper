@@ -8,14 +8,14 @@
 # Self-contained (no other repo files needed), so it also works via curl:
 #
 #   sudo packaging/uninstall.sh [--purge]
-#   curl -fsSL https://raw.githubusercontent.com/mikegio27/go-input-remapper/main/packaging/uninstall.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/mikegio27/nereus/main/packaging/uninstall.sh | sudo bash
 #   curl -fsSL .../packaging/uninstall.sh | sudo bash -s -- --purge
 set -euo pipefail
 
-BIN=/usr/local/bin/go-input-remapper
-UNIT_NAME=go-input-remapper.service
+BIN=/usr/local/bin/nereus
+UNIT_NAME=nereus.service
 UNIT=/etc/systemd/system/$UNIT_NAME
-UDEV_RULE=/etc/udev/rules.d/99-go-input-remapper.rules
+UDEV_RULE=/etc/udev/rules.d/99-nereus.rules
 MODULES_CONF=/etc/modules-load.d/uinput.conf
 
 PURGE=0
@@ -42,10 +42,10 @@ fi
 # the right place and we can tell the user where their config is being kept.
 TARGET_USER="${SUDO_USER:-root}"
 if [[ "$TARGET_USER" == "root" ]]; then
-	CONFIG_DIR=/etc/go-input-remapper
+	CONFIG_DIR=/etc/nereus
 else
 	USER_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
-	CONFIG_DIR="$USER_HOME/.config/go-input-remapper"
+	CONFIG_DIR="$USER_HOME/.config/nereus"
 fi
 
 echo "==> stopping and disabling $UNIT_NAME"

@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mikegio27/go-input-remapper/internal/config"
-	"github.com/mikegio27/go-input-remapper/internal/control"
+	"github.com/mikegio27/nereus/internal/config"
+	"github.com/mikegio27/nereus/internal/control"
 )
 
 // startTestServer writes a two-profile config, applies it, and starts a control
@@ -16,7 +16,7 @@ func startTestServer(t *testing.T) (*control.Client, string) {
 
 	cfg := &config.Config{
 		ActiveProfile: "default",
-		VirtualPrefix: "go-input-remapper",
+		VirtualPrefix: "nereus",
 		Profiles: map[string]*config.Profile{
 			"default": {Name: "default", Devices: []config.DeviceBinding{
 				{Match: config.DeviceMatcher{Name: "Nonexistent Keyboard"}},

@@ -3,16 +3,16 @@
 # Docs: https://goreleaser.com
 version: 2
 
-project_name: go-input-remapper
+project_name: nereus
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: go-input-remapper
+  - id: nereus
     main: .
-    binary: go-input-remapper
+    binary: nereus
     env:
       - CGO_ENABLED=0
     goos:
@@ -20,15 +20,15 @@ builds:
     goarch:
       - amd64
       - arm64
-    # Stamp the version into cmd.version so `go-input-remapper version` is accurate.
+    # Stamp the version into cmd.version so `nereus version` is accurate.
     ldflags:
-      - -s -w -X github.com/mikegio27/go-input-remapper/cmd.version={{ .Version }}
+      - -s -w -X github.com/mikegio27/nereus/cmd.version={{ .Version }}
 
 archives:
   # name_template intentionally omits the version so install.sh can fetch a
-  # stable asset name (go-input-remapper_linux_amd64.tar.gz) for any release.
+  # stable asset name (nereus_linux_amd64.tar.gz) for any release.
   - id: default
-    name_template: "go-input-remapper_{{ .Os }}_{{ .Arch }}"
+    name_template: "nereus_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
       - LICENSE*
@@ -50,7 +50,7 @@ changelog:
 release:
   github:
     owner: mikegio27
-    name: go-input-remapper
+    name: nereus
   # release-please creates the GitHub Release (notes + tag); GoReleaser only adds
   # the binary archives + checksums to it, so append rather than recreate.
   mode: append

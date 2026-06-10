@@ -11,9 +11,9 @@ import (
 	"os/user"
 	"strconv"
 
-	"github.com/mikegio27/go-input-remapper/internal/config"
-	"github.com/mikegio27/go-input-remapper/internal/control"
-	"github.com/mikegio27/go-input-remapper/internal/device"
+	"github.com/mikegio27/nereus/internal/config"
+	"github.com/mikegio27/nereus/internal/control"
+	"github.com/mikegio27/nereus/internal/device"
 )
 
 // controlServer serves the control protocol on a Unix socket, translating client

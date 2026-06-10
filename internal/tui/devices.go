@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mikegio27/go-input-remapper/internal/control"
+	"github.com/mikegio27/nereus/internal/control"
 )
 
 func (m *Model) devicesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

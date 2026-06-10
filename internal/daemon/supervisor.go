@@ -8,9 +8,9 @@ import (
 	"time"
 
 	evdev "github.com/mikegio27/go-evdev"
-	"github.com/mikegio27/go-input-remapper/internal/config"
-	"github.com/mikegio27/go-input-remapper/internal/device"
-	"github.com/mikegio27/go-input-remapper/internal/engine"
+	"github.com/mikegio27/nereus/internal/config"
+	"github.com/mikegio27/nereus/internal/device"
+	"github.com/mikegio27/nereus/internal/engine"
 )
 
 // addRetries / addBackoff bound the retry when a freshly hotplugged device isn't

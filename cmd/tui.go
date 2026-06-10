@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/mikegio27/go-input-remapper/internal/paths"
-	"github.com/mikegio27/go-input-remapper/internal/tui"
+	"github.com/mikegio27/nereus/internal/paths"
+	"github.com/mikegio27/nereus/internal/tui"
 	"github.com/spf13/cobra"
 )
 

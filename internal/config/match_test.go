@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"github.com/mikegio27/go-input-remapper/internal/device"
+	"github.com/mikegio27/nereus/internal/device"
 )
 
 func TestMatcherMatches(t *testing.T) {

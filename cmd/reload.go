@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mikegio27/go-input-remapper/internal/config"
-	"github.com/mikegio27/go-input-remapper/internal/control"
-	"github.com/mikegio27/go-input-remapper/internal/paths"
+	"github.com/mikegio27/nereus/internal/config"
+	"github.com/mikegio27/nereus/internal/control"
+	"github.com/mikegio27/nereus/internal/paths"
 	"github.com/spf13/cobra"
 )
 

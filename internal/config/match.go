@@ -1,6 +1,6 @@
 package config
 
-import "github.com/mikegio27/go-input-remapper/internal/device"
+import "github.com/mikegio27/nereus/internal/device"
 
 // Matches reports whether a device identity satisfies the matcher. Every
 // criterion the matcher specifies must equal the device's value (logical AND);

@@ -81,7 +81,7 @@ func TestRecommend(t *testing.T) {
 		{"gamepad", infoOf("pad", KindGamepad, true, false), true, "EV_ABS"},
 		{"touchpad not recommended", infoOf("tp", KindTouchpad, true, false), false, "EV_ABS"},
 		{"unknown not recommended", infoOf("?", KindUnknown, false, false), false, "unrecognized"},
-		{"virtual device hard-blocked", infoOf("go-input-remapper kbd", KindKeyboard, false, true), false, "feedback loop"},
+		{"virtual device hard-blocked", infoOf("nereus kbd", KindKeyboard, false, true), false, "feedback loop"},
 	}
 
 	for _, tc := range tests {
@@ -103,11 +103,11 @@ func TestRecommend(t *testing.T) {
 }
 
 func TestIsVirtualName(t *testing.T) {
-	const prefix = "go-input-remapper"
+	const prefix = "nereus"
 	cases := map[string]bool{
-		"go-input-remapper kbd": true,
-		"Keychron K8 Pro":       false,
-		"":                      false,
+		"nereus kbd":      true,
+		"Keychron K8 Pro": false,
+		"":                false,
 	}
 	for name, want := range cases {
 		if got := IsVirtualName(name, prefix); got != want {

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	evdev "github.com/mikegio27/go-evdev"
-	"github.com/mikegio27/go-input-remapper/internal/config"
+	"github.com/mikegio27/nereus/internal/config"
 )
 
 // recordSink records the events and syncs written to it, in order.

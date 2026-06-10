@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mikegio27/go-input-remapper/internal/config"
-	"github.com/mikegio27/go-input-remapper/internal/control"
+	"github.com/mikegio27/nereus/internal/config"
+	"github.com/mikegio27/nereus/internal/control"
 )
 
 // TestViewFillsFrame checks every top-level screen renders to exactly the
@@ -76,7 +76,7 @@ func newTestModel(t *testing.T) (*Model, string) {
 	dir := t.TempDir()
 	cfg := &config.Config{
 		ActiveProfile: "default",
-		VirtualPrefix: "go-input-remapper",
+		VirtualPrefix: "nereus",
 		Profiles:      map[string]*config.Profile{"default": {Name: "default"}},
 	}
 	if err := config.Save(dir, cfg); err != nil {
@@ -379,7 +379,7 @@ func TestDeviceFilterDefaultRemappableOnly(t *testing.T) {
 	m.Update(devicesMsg{devices: []control.DeviceInfo{
 		{Path: "/dev/input/event3", Name: "Test Keyboard", Kind: "keyboard", Recommended: true},
 		{Path: "/dev/input/event9", Name: "Weird Sensor", Kind: "unknown", Recommended: false},
-		{Path: "/dev/input/event10", Name: "go-input-remapper Test Keyboard", Kind: "keyboard", Recommended: false, IsVirtual: true},
+		{Path: "/dev/input/event10", Name: "nereus Test Keyboard", Kind: "keyboard", Recommended: false, IsVirtual: true},
 	}})
 
 	if got := len(m.visibleDevices()); got != 1 {

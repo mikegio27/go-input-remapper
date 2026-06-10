@@ -10,7 +10,7 @@ import (
 	"log/slog"
 
 	evdev "github.com/mikegio27/go-evdev"
-	"github.com/mikegio27/go-input-remapper/internal/config"
+	"github.com/mikegio27/nereus/internal/config"
 )
 
 // Options configures a daemon run.

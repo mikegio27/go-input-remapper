@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Update an existing go-input-remapper system install in place.
+# Update an existing nereus system install in place.
 #
 # Stops the service (releasing device grabs and freeing the running binary so the
 # new one can't hit "text file busy"), installs the binary, and starts the service
@@ -23,7 +23,7 @@ usage() {
 	cat >&2 <<'EOF'
 Usage: sudo packaging/update.sh [options]
 
-Update an installed go-input-remapper in place (stop service, install, restart).
+Update an installed nereus in place (stop service, install, restart).
 
 Options:
   -s, --source         build from THIS checkout instead of downloading a release
@@ -55,8 +55,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN=/usr/local/bin/go-input-remapper
-UNIT=go-input-remapper.service
+BIN=/usr/local/bin/nereus
+UNIT=nereus.service
 
 # shellcheck source=packaging/lib.sh
 source "$REPO_ROOT/packaging/lib.sh"

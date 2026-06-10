@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/mikegio27/go-input-remapper/internal/paths"
+	"github.com/mikegio27/nereus/internal/paths"
 )
 
 // debounceInterval coalesces the burst of filesystem events a single save

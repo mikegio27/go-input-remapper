@@ -1,4 +1,4 @@
-// Package cmd wires the Cobra command tree for the single go-input-remapper
+// Package cmd wires the Cobra command tree for the single nereus
 // binary. Subcommands share the global --config-dir and --socket flags so the
 // daemon, TUI, and CLI all resolve the same locations.
 package cmd
@@ -20,9 +20,9 @@ var (
 // rootCmd is the base command. With no subcommand it launches the TUI (the
 // expected interactive entry point); other subcommands are headless.
 var rootCmd = &cobra.Command{
-	Use:   "go-input-remapper",
+	Use:   "nereus",
 	Short: "Remap inputs, define macros, and switch profiles on Linux",
-	Long: "go-input-remapper is a Linux input remapper: a persistent daemon executes\n" +
+	Long: "nereus is a Linux input remapper: a persistent daemon executes\n" +
 		"remaps and macros from TOML config files, and a TUI front-end edits those\n" +
 		"files and talks to the daemon. Run with no subcommand to open the TUI.",
 	SilenceUsage:  true,
@@ -44,8 +44,8 @@ func Execute() int {
 
 func init() {
 	pf := rootCmd.PersistentFlags()
-	pf.StringVar(&flagConfigDir, "config-dir", "", "config directory (default: $XDG_CONFIG_HOME/go-input-remapper)")
-	pf.StringVar(&flagSocket, "socket", "", "control socket path (default: $XDG_RUNTIME_DIR/go-input-remapper.sock)")
+	pf.StringVar(&flagConfigDir, "config-dir", "", "config directory (default: $XDG_CONFIG_HOME/nereus)")
+	pf.StringVar(&flagSocket, "socket", "", "control socket path (default: $XDG_RUNTIME_DIR/nereus.sock)")
 	pf.BoolVarP(&flagVerbose, "verbose", "v", false, "enable debug logging")
 }
 
