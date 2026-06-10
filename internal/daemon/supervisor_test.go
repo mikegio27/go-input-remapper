@@ -3,7 +3,7 @@ package daemon
 import (
 	"testing"
 
-	"github.com/mikegio27/go-input-remapper/internal/config"
+	"github.com/mikegio27/nereus/internal/config"
 )
 
 // TestReloadSuppressedAfterApply verifies that applying a config arms the

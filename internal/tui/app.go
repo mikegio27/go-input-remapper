@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mikegio27/go-input-remapper/internal/config"
-	"github.com/mikegio27/go-input-remapper/internal/control"
+	"github.com/mikegio27/nereus/internal/config"
+	"github.com/mikegio27/nereus/internal/control"
 )
 
 // pollInterval is how often the TUI re-checks daemon status so the connection
@@ -383,7 +383,7 @@ func (m *Model) header() string {
 	if profile == "" {
 		profile = "(none)"
 	}
-	left := titleStyle.Render("go-input-remapper")
+	left := titleStyle.Render("nereus")
 	info := headerBarStyle.Render("profile: " + tabActiveStyle.Render(profile) + "   " + dot(m.daemonUp) + " daemon")
 
 	var tabs []string

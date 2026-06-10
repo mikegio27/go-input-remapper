@@ -10,7 +10,7 @@ import (
 func sampleConfig() *Config {
 	return &Config{
 		ActiveProfile: "default",
-		VirtualPrefix: "go-input-remapper",
+		VirtualPrefix: "nereus",
 		Profiles: map[string]*Profile{
 			"default": {
 				Name: "default",

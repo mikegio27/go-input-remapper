@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/mikegio27/go-input-remapper/internal/paths"
+	"github.com/mikegio27/nereus/internal/paths"
 	"github.com/pelletier/go-toml/v2"
 )
 

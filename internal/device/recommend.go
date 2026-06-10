@@ -148,7 +148,7 @@ func recommendOne(in Info) Recommendation {
 	if in.IsVirtual {
 		r.Remappable = false
 		r.Reasons = append(r.Reasons,
-			"this is a go-input-remapper virtual device — remapping it would create a feedback loop")
+			"this is a nereus virtual device — remapping it would create a feedback loop")
 		return r
 	}
 

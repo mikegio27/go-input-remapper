@@ -7,7 +7,7 @@
 #
 # Quick install (no clone needed):
 #
-#   curl -fsSL https://raw.githubusercontent.com/mikegio27/go-input-remapper/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/mikegio27/nereus/main/install.sh | sudo bash
 #
 # It downloads a prebuilt binary (no Go required) when one exists for your
 # platform, otherwise builds from source if Go is installed. Then it installs the
@@ -21,7 +21,7 @@
 # If you already have a checkout, just run: sudo ./install.sh
 set -euo pipefail
 
-REPO="mikegio27/go-input-remapper"
+REPO="mikegio27/nereus"
 
 if [[ $EUID -ne 0 ]]; then
 	echo "this installer must run as root — pipe it to 'sudo bash', or run 'sudo ./install.sh'" >&2
@@ -51,7 +51,7 @@ else
 		echo "  If codeload.github.com is blocked or slow on your network, install from a" >&2
 		echo "  clone instead:" >&2
 		echo "    git clone https://github.com/$REPO" >&2
-		echo "    sudo ./go-input-remapper/install.sh" >&2
+		echo "    sudo ./nereus/install.sh" >&2
 		echo "  (or download a release tarball from https://github.com/$REPO/releases)" >&2
 		exit 1
 	fi

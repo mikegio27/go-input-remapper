@@ -10,8 +10,8 @@ import (
 	"time"
 
 	evdev "github.com/mikegio27/go-evdev"
-	"github.com/mikegio27/go-input-remapper/internal/control"
-	"github.com/mikegio27/go-input-remapper/internal/device"
+	"github.com/mikegio27/nereus/internal/control"
+	"github.com/mikegio27/nereus/internal/device"
 )
 
 // captureSinkSize buffers a capture session's events so a brief stall doesn't

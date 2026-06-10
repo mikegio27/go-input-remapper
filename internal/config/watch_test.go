@@ -7,7 +7,7 @@ import (
 )
 
 func TestRelevantConfigChange(t *testing.T) {
-	dir := "/etc/go-input-remapper"
+	dir := "/etc/nereus"
 	profDir := filepath.Join(dir, "profiles")
 	cases := []struct {
 		name string

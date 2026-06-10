@@ -2,9 +2,9 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/mikegio27/go-input-remapper/internal/config"
-	"github.com/mikegio27/go-input-remapper/internal/control"
-	"github.com/mikegio27/go-input-remapper/internal/device"
+	"github.com/mikegio27/nereus/internal/config"
+	"github.com/mikegio27/nereus/internal/control"
+	"github.com/mikegio27/nereus/internal/device"
 )
 
 // Messages flowing back into the Bubble Tea update loop.

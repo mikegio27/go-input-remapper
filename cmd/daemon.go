@@ -4,8 +4,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mikegio27/go-input-remapper/internal/daemon"
-	"github.com/mikegio27/go-input-remapper/internal/paths"
+	"github.com/mikegio27/nereus/internal/daemon"
+	"github.com/mikegio27/nereus/internal/paths"
 	"github.com/spf13/cobra"
 )
 

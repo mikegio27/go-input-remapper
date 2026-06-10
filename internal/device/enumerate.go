@@ -6,10 +6,10 @@ import (
 	evdev "github.com/mikegio27/go-evdev"
 )
 
-// DefaultVirtualPrefix is the default device-name prefix for go-input-remapper's
+// DefaultVirtualPrefix is the default device-name prefix for nereus's
 // virtual output devices, used by the feedback-loop guard. The config may
 // override it, but the default lives here next to IsVirtualName, its main user.
-const DefaultVirtualPrefix = "go-input-remapper"
+const DefaultVirtualPrefix = "nereus"
 
 // InspectAll opens every evdev device node and inspects the ones it can read,
 // skipping any node it can't (permission denied, or a node that vanished or won't

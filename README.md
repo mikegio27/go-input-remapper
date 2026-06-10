@@ -1,4 +1,4 @@
-# go-input-remapper
+# nereus
 
 Monitor and remap inputs, define macros, and switch profiles on Linux. A
 persistent **daemon** reads TOML config files and executes the remapping; a
@@ -26,16 +26,16 @@ so remaps survive reboots and hotplugs.
 ## Commands
 
 ```
-go-input-remapper            # open the TUI (default)
-go-input-remapper daemon     # run the daemon (usually via systemd)
-go-input-remapper list [-r]  # list devices; -r shows remap recommendations
-go-input-remapper status     # daemon's active profile + bound devices
-go-input-remapper reload     # tell the daemon to re-read its config
-go-input-remapper validate   # check config files without applying them
+nereus            # open the TUI (default)
+nereus daemon     # run the daemon (usually via systemd)
+nereus list [-r]  # list devices; -r shows remap recommendations
+nereus status     # daemon's active profile + bound devices
+nereus reload     # tell the daemon to re-read its config
+nereus validate   # check config files without applying them
 ```
 
-Global flags: `--config-dir` (default `$XDG_CONFIG_HOME/go-input-remapper`),
-`--socket` (default `$XDG_RUNTIME_DIR/go-input-remapper.sock`), `-v` verbose.
+Global flags: `--config-dir` (default `$XDG_CONFIG_HOME/nereus`),
+`--socket` (default `$XDG_RUNTIME_DIR/nereus.sock`), `-v` verbose.
 
 ## TUI
 
@@ -147,35 +147,35 @@ By default a macro runs its steps once per trigger. Set `repeat` to make it loop
 One line — no clone, and no Go toolchain needed (it downloads a prebuilt binary):
 
 ```
-curl -fsSL https://raw.githubusercontent.com/mikegio27/go-input-remapper/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mikegio27/nereus/main/install.sh | sudo bash
 sudo usermod -aG input $USER   # so the TUI works without sudo; then re-login
 ```
 
 The installer downloads the prebuilt binary for your architecture (linux
-amd64/arm64) from the latest [GitHub Release](https://github.com/mikegio27/go-input-remapper/releases)
+amd64/arm64) from the latest [GitHub Release](https://github.com/mikegio27/nereus/releases)
 and verifies its checksum. If no prebuilt binary is available for your platform,
 it falls back to building from source (which needs Go installed). It then installs
 the binary to `/usr/local/bin`, the udev rules
-(`packaging/99-go-input-remapper.rules`) granting the `input` group access to
+(`packaging/99-nereus.rules`) granting the `input` group access to
 `/dev/input/event*` and `/dev/uinput`, loads the `uinput` module, and installs +
-enables the systemd unit (`packaging/go-input-remapper.service`).
+enables the systemd unit (`packaging/nereus.service`).
 
 From a checkout you can run the same installer locally: `sudo ./install.sh`.
 Useful overrides: `GIR_VERSION=vX.Y.Z` to pin a release, or
 `GIR_BUILD_FROM_SOURCE=1` to always build from source.
 
 When run with `sudo`, the installer points the root service at the **invoking
-user's** config (`~/.config/go-input-remapper`) — the same files the TUI edits —
+user's** config (`~/.config/nereus`) — the same files the TUI edits —
 and relaxes `ProtectHome` so the daemon can read them. (Installed straight as root
-with no `sudo` user, it uses the system-wide `/etc/go-input-remapper` instead.)
+with no `sudo` user, it uses the system-wide `/etc/nereus` instead.)
 
 The daemon needs read on `/dev/input/event*` and write on `/dev/uinput`; the udev
 rules provide both via the `input` group. The root daemon listens on
-`/run/go-input-remapper.sock`; the TUI/CLI auto-detect it (a per-user daemon's
+`/run/nereus.sock`; the TUI/CLI auto-detect it (a per-user daemon's
 socket takes precedence if one is running), so you normally don't pass `--socket`.
 Being in the `input` group is what lets your user reach that socket.
 
-`go-input-remapper version` (or `--version`) prints the installed version.
+`nereus version` (or `--version`) prints the installed version.
 
 ### Updating
 
@@ -206,7 +206,7 @@ It keeps your config by default. The uninstaller is self-contained, so you can
 also run it straight from the web:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/mikegio27/go-input-remapper/main/packaging/uninstall.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mikegio27/nereus/main/packaging/uninstall.sh | sudo bash
 ```
 
 It leaves the `uinput` module loaded (other software may use `/dev/uinput`) and

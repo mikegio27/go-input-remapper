@@ -11,12 +11,12 @@ import (
 )
 
 // appName is the directory/socket basename used across all locations.
-const appName = "go-input-remapper"
+const appName = "nereus"
 
 // ConfigDir returns the directory holding config.toml and profiles/. Resolution
 // order: the explicit override (e.g. a --config-dir flag), then
-// $XDG_CONFIG_HOME/go-input-remapper, then ~/.config/go-input-remapper, then the
-// system-wide /etc/go-input-remapper. The directory is not created here.
+// $XDG_CONFIG_HOME/nereus, then ~/.config/nereus, then the
+// system-wide /etc/nereus. The directory is not created here.
 func ConfigDir(override string) string {
 	if override != "" {
 		return override
@@ -41,8 +41,8 @@ func ConfigFile(configDir string) string {
 }
 
 // SocketPath returns the control socket path. Resolution order: the explicit
-// override (e.g. a --socket flag), then $XDG_RUNTIME_DIR/go-input-remapper.sock
-// for a per-user daemon, then the system-wide /run/go-input-remapper.sock. The
+// override (e.g. a --socket flag), then $XDG_RUNTIME_DIR/nereus.sock
+// for a per-user daemon, then the system-wide /run/nereus.sock. The
 // daemon uses this to create the socket; clients should use ClientSocketPath.
 func SocketPath(override string) string {
 	if override != "" {

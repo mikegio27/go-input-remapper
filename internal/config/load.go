@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mikegio27/go-input-remapper/internal/device"
-	"github.com/mikegio27/go-input-remapper/internal/paths"
+	"github.com/mikegio27/nereus/internal/device"
+	"github.com/mikegio27/nereus/internal/paths"
 	"github.com/pelletier/go-toml/v2"
 )
 

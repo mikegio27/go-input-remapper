@@ -3,8 +3,8 @@
 # binary, either by downloading a prebuilt release asset (no Go required) or,
 # failing that, building from source. Sourced — not run directly.
 
-REPO="mikegio27/go-input-remapper"
-BIN="${BIN:-/usr/local/bin/go-input-remapper}"
+REPO="mikegio27/nereus"
+BIN="${BIN:-/usr/local/bin/nereus}"
 
 # Bounded curl: fail on HTTP errors, follow redirects, and never hang forever on a
 # slow/blocked host (the GitHub API and codeload live on different hosts than the
@@ -49,7 +49,7 @@ source_version() {
 # the caller can fall back to a source build.
 download_release_binary() {
 	local tag="$1" arch="$2" tmp asset url
-	asset="go-input-remapper_linux_${arch}.tar.gz" # must match .goreleaser.yaml name_template
+	asset="nereus_linux_${arch}.tar.gz" # must match .goreleaser.yaml name_template
 	url="https://github.com/$REPO/releases/download/$tag/$asset"
 	tmp="$(mktemp -d)"
 
@@ -71,7 +71,7 @@ download_release_binary() {
 	fi
 
 	tar xzf "$tmp/$asset" -C "$tmp"
-	install -m 0755 "$tmp/go-input-remapper" "$BIN"
+	install -m 0755 "$tmp/nereus" "$BIN"
 	rm -rf "$tmp"
 	echo "==> installed $BIN ($tag)"
 }
@@ -87,7 +87,7 @@ build_from_source() {
 	fi
 	echo "==> building from source ($(source_version))"
 	(cd "$REPO_ROOT" && go build \
-		-ldflags "-X github.com/mikegio27/go-input-remapper/cmd.version=$(source_version)" \
+		-ldflags "-X github.com/mikegio27/nereus/cmd.version=$(source_version)" \
 		-o "$BIN" .)
 	echo "==> installed $BIN (source build)"
 }
