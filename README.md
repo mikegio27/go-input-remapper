@@ -245,25 +245,3 @@ access: the daemon serves the grabbed device's keypresses to the TUI over the
 socket, so capture won't produce anything if the daemon isn't running or can't
 read the device. If a capture fails, the TUI now reports why (and the daemon logs
 it).
-
-
-### ENHANCEMENTS
-
-**Macros — done.** Tap steps can now emit multiple keys at once as a chord
-(`keys = [...]`, captured by holding several keys together in the recorder). New
-mappings can be added from the **Mappings** tab (`a` → pick device → remap or
-macro), in addition to the per-device `enter`/`m` shortcuts.
-
-**Design — done.** Bordered, titled panels with more spacing and side-by-side
-list/detail layouts; tab order is Devices | Mappings | Profiles | Status; the
-blue + green accent palette is unchanged.
-
-**Deployment/Install — done.** A single curl command installs without a clone
-(`curl … | sudo bash`), downloading a prebuilt binary so Go isn't required, with a
-source-build fallback when no binary fits the platform. Releases are automated
-with `release-please` (semver from Conventional Commits) + GoReleaser (prebuilt
-linux amd64/arm64 binaries + checksums on each GitHub Release), and both
-`install.sh` and `update.sh` prefer the latest release binary. The `go-evdev`
-dependency is now consumed as the published `v1.0.0` module (the local `replace`
-directive is gone), so the repo builds standalone. See the **Install** section and
-`.github/workflows/`.
